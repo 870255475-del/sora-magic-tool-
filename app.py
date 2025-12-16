@@ -5,12 +5,14 @@ import os
 import gc
 import time
 from openai import OpenAI
+import streamlit.components.v1 as components
+import base64
 
 # ==========================================
 # 👇 0. 核心配置 👇
 # ==========================================
 st.set_page_config(
-    page_title="Miss Pink Elf's Studio v27.1 (Final Complete)", 
+    page_title="Miss Pink Elf's Studio v32.0 (Final Layout)", 
     layout="wide", 
     page_icon="🌸",
     initial_sidebar_state="expanded"
@@ -20,7 +22,7 @@ st.set_page_config(
 # 👇 1. 核心样式与特效 👇
 # ==========================================
 def load_elysia_style():
-    # 完整的 CSS 样式
+    # 完整的 CSS 样式 (包含拖拽卡片的样式)
     st.markdown("""
     <style>
     /* 全局 */
@@ -29,6 +31,37 @@ def load_elysia_style():
     
     /* 侧边栏 */
     section[data-testid="stSidebar"] { background-color: rgba(255, 255, 255, 0.75); backdrop-filter: blur(20px); }
+
+    /* ✨ 拖拽容器 (关键) */
+    .dnd-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; } /* 改回3列 */
+    
+    /* ✨ 拖拽卡片 (关键) */
+    .dnd-item {
+        position: relative;
+        background: rgba(255,255,255,0.7);
+        border-radius: 18px;
+        padding: 15px;
+        box-shadow: 0 6px 20px rgba(0,0,0,0.05);
+        border: 2px solid transparent;
+        transition: all 0.3s ease;
+        cursor: grab; /* 抓取手势 */
+    }
+    .dnd-item:hover { border-color: #FFB6C1; }
+    .dnd-item:active { cursor: grabbing; } /* 抓取中手势 */
+
+    /* 拖拽占位符 */
+    .sortable-ghost { background: #FFC0CB; opacity: 0.4; border-radius: 18px; }
+    
+    /* 删除按钮 */
+    .delete-btn {
+        position: absolute; top: 10px; right: 10px;
+        background: white; border: none; border-radius: 50%;
+        width: 30px; height: 30px; color: #FF69B4;
+        font-size: 16px; font-weight: bold; cursor: pointer;
+        transition: all 0.2s; z-index: 10;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .delete-btn:hover { background: #FF69B4; color: white; transform: scale(1.1); }
 
     /* 输入控件 */
     .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] {
@@ -57,8 +90,12 @@ def load_elysia_style():
 load_elysia_style()
 
 # ==========================================
-# 👇 2. 工具函数库 (完整版) 👇
+# 👇 2. 工具函数库 👇
 # ==========================================
+@st.cache_data(show_spinner=False)
+def get_base64_image(image_bytes):
+    return base64.b64encode(image_bytes).decode()
+
 @st.cache_resource
 def get_font(size):
     possible_fonts = ["DejaVuSans-Bold.ttf", "arialbd.ttf", "Arial.ttf"]
@@ -72,19 +109,16 @@ def load_preview_image(file_name, _bytes):
     image = Image.open(io.BytesIO(_bytes))
     if image.mode in ('RGBA', 'P'): image = image.convert('RGB')
     image.thumbnail((400, 400))
-    return image
+    buf = io.BytesIO()
+    image.save(buf, format="JPEG")
+    return buf.getvalue()
 
 def generate_sora_prompt_with_ai(api_key, base_url, model_name, global_style, cam, phys, ratio, motion, neg_prompt, shots_data):
     if not api_key: return "API Key not provided."
     if not base_url: base_url = "https://api.openai.com/v1"
     client = OpenAI(api_key=api_key, base_url=base_url)
     tech_specs = f"Specs: Ratio {ratio}, Motion {motion}/10, {cam}, {phys}"
-    system_prompt = f"""You are an expert Sora 2 prompt engineer. Your task is to convert a storyboard into a narrative, physically-aware prompt.
-    - Start with technical specs: "{tech_specs}"
-    - Use timeline markers: [0s-2s].
-    - Incorporate negative prompts: "Ensure high quality, avoid {neg_prompt}."
-    - Output only the final prompt.
-    """
+    system_prompt = f"You are an expert Sora 2 prompt engineer..."
     user_content = f"Global Style: {global_style}\nStoryboard:\n"
     current_time = 0.0
     for idx, item in enumerate(shots_data):
@@ -98,7 +132,7 @@ def generate_sora_prompt_with_ai(api_key, base_url, model_name, global_style, ca
         return f"Error: {str(e)}"
 
 # ==========================================
-# 👇 3. 状态管理 & 数据 (完整版) 👇
+# 👇 3. 状态管理 & 数据 👇
 # ==========================================
 if "files" not in st.session_state: st.session_state.files = []
 if "shots_data" not in st.session_state: st.session_state.shots_data = {}
@@ -114,7 +148,7 @@ DEFAULT_NEG = "morphing, distortion, bad anatomy, blurry, watermark, text"
 MAX_FILES = 6
 
 # ==========================================
-# 👇 4. 侧边栏 UI (完整版) 👇
+# 👇 4. 侧边栏 UI 👇
 # ==========================================
 def render_sidebar():
     with st.sidebar:
@@ -148,7 +182,7 @@ def render_sidebar():
                 st.image("pay.jpg")
 
 # ==========================================
-# 👇 5. 主工作台 (完整版) 👇
+# 👇 5. 主工作台 👇
 # ==========================================
 def render_hero_section():
     st.info(f"👈 请上传图片开始创作 (最多 {MAX_FILES} 张)")
@@ -158,92 +192,156 @@ def render_hero_section():
     with col2: st.markdown("<div class='feature-card'>...</div>", unsafe_allow_html=True)
     with col3: st.markdown("<div class='feature-card'>...</div>", unsafe_allow_html=True)
 
-def render_workspace():
-    st.caption("👇 在每个卡片中编辑信息，使用 ⬆️⬇️ 调整顺序，或点击 ❌ 删除")
-
-    cols = st.columns(3)
-    shots_data = []
-
-    def move_item(index, direction):
-        if direction == "up" and index > 0: st.session_state.files.insert(index - 1, st.session_state.files.pop(index))
-        elif direction == "down" and index < len(st.session_state.files) - 1: st.session_state.files.insert(index + 1, st.session_state.files.pop(index))
-    
-    def delete_item(index):
-        st.session_state.files.pop(index)
-
-    for i, file_data in enumerate(st.session_state.files):
-        with cols[i % 3]:
-            with st.container():
-                st.image(load_preview_image(file_data["name"], file_data["bytes"]), use_container_width=True)
-                
-                s_type_full = st.selectbox("视角", SHOT_OPTIONS, key=f"s_{i}")
-                dur = st.number_input("秒", value=2.0, step=0.5, key=f"d_{i}")
-                desc = st.text_input("描述", placeholder="动作...", key=f"t_{i}")
-                
-                c1, c2, c3 = st.columns([1,1,1])
-                with c1: st.button("⬆️", key=f"up_{i}", on_click=move_item, args=(i, "up"), use_container_width=True)
-                with c2: st.button("⬇️", key=f"down_{i}", on_click=move_item, args=(i, "down"), use_container_width=True)
-                with c3: st.button("❌", key=f"del_{i}", on_click=delete_item, args=(i,), use_container_width=True, type="primary")
-
-                shots_data.append({"bytes": file_data["bytes"], "shot_code": s_type_full.split(" ")[0], "dur": dur, "desc": desc})
-
-    st.write("---")
-    if st.button("✨ 施展魔法 (生成分镜 + 咒语) ✨", type="primary", use_container_width=True):
-        with st.status("💎 魔法咏唱中...", expanded=True) as status:
-            status.write("🖼️ 正在构建专业分镜...")
-            # Image generation logic
-            canvas = Image.new('RGB', (1280, 720), "#000000") # Placeholder
-            
-            prompt_res = ""
-            if 'api_key' in st.session_state and st.session_state.api_key:
-                status.write("🧠 AI 正在撰写剧本...")
-                # AI call logic
-                prompt_res = "AI generated prompt."
-
-            status.update(label="✨ 魔法完成！", state="complete")
-            buf = io.BytesIO()
-            canvas.save(buf, format="JPEG")
-            st.session_state.last_result = {"image_bytes": buf.getvalue(), "prompt": prompt_res}
-            st.session_state.history.append(st.session_state.last_result)
-
-def render_results():
-    if st.session_state.last_result:
-        st.success("✅ 生成成功！")
-        res = st.session_state.last_result
-        tab1, tab2, tab3 = st.tabs(["🖼️ 专业分镜图", "📜 Sora 2 咒语", "🕰️ 历史记录"])
-        with tab1:
-            st.image(res["image_bytes"], use_container_width=True)
-            st.download_button("📥 下载分镜图", res["image_bytes"], "sora_pro.jpg", "image/jpeg")
-        with tab2:
-            if res["prompt"]:
-                st.code(res["prompt"])
-                st.download_button("📄 下载提示词 (.txt)", res["prompt"], "prompt.txt")
-        with tab3:
-            st.caption("历史记录")
-            for h in reversed(st.session_state.history[:-1]):
-                st.image(h["image_bytes"])
-
 def main():
     render_sidebar()
-    st.title("Miss Pink Elf's Studio v31.1")
+    st.title("Miss Pink Elf's Studio v32.0")
 
-    uploaded_files_now = st.file_uploader(f"📂 **拖入图片 (最多 {MAX_FILES} 张)**", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True, key="uploader")
-    if uploaded_files_now:
-        existing_names = {f['name'] for f in st.session_state.files}
-        has_new_files = False
-        for f in uploaded_files_now:
-            if len(st.session_state.files) < MAX_FILES and f.name not in existing_names:
-                st.session_state.files.append({"name": f.name, "bytes": f.getvalue()})
-                has_new_files = True
-        if has_new_files:
-            st.rerun()
+    newly_uploaded_files = st.file_uploader(f"📂 **拖入图片 (最多 {MAX_FILES} 张)**", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True, key="uploader")
+    if newly_uploaded_files:
+        if len(st.session_state.files) >= MAX_FILES:
+            st.warning(f"最多只能上传 {MAX_FILES} 张图片！")
+        else:
+            existing_names = {f['name'] for f in st.session_state.files}
+            files_to_add = [f for f in newly_uploaded_files if f.name not in existing_names][:MAX_FILES - len(st.session_state.files)]
+            for file in files_to_add:
+                st.session_state.files.append({"name": file.name, "bytes": file.getvalue()})
+                st.session_state.shots_data[file.name] = {"shot_type": "CU (特写)", "duration": 2.0, "desc": ""}
+            if files_to_add:
+                st.rerun()
 
     if not st.session_state.files:
         render_hero_section()
     else:
-        render_workspace()
-    
-    render_results()
+        st.caption("👇 按住卡片拖动排序，或在卡片中填写信息")
+        
+        item_html_list = []
+        for i, file_data in enumerate(st.session_state.files):
+            thumb_bytes = load_preview_image(file_data["name"], file_data["bytes"])
+            b64_thumb = get_base64_image(thumb_bytes)
+            file_name = file_data['name']
+            
+            item_html_list.append(f"""
+            <div class="dnd-item" data-id="{file_name}">
+                <button class="delete-btn" data-id="{file_name}" onclick="deleteItem(this)">X</button>
+                <img src="data:image/jpeg;base64,{b64_thumb}" style="width: 100%; border-radius: 10px;">
+            </div>
+            """)
+
+        drag_area = components.html(
+            f"""
+            <div id="dnd-gallery" class="dnd-container">
+                {''.join(item_html_list)}
+            </div>
+            <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+            <script>
+            const el = document.getElementById('dnd-gallery');
+            const sortable = new Sortable(el, {{
+                animation: 150, ghostClass: 'sortable-ghost',
+                onEnd: function (evt) {{
+                    const newOrder = Array.from(el.children).map(item => item.getAttribute('data-id'));
+                    Streamlit.setComponentValue({{type: 'drag', order: newOrder.join(',')}});
+                }}
+            }});
+            function deleteItem(btn) {{
+                const itemId = btn.getAttribute('data-id');
+                Streamlit.setComponentValue({{type: 'delete', id: itemId}});
+            }}
+            </script>
+            """,
+            height= (len(st.session_state.files) // 3 + 1) * 300,
+            key="dnd_component"
+        )
+        
+        if drag_area:
+            if drag_area['type'] == 'drag':
+                new_order_names = drag_area['order'].split(',')
+                st.session_state.files = sorted(st.session_state.files, key=lambda x: new_order_names.index(x['name']))
+                st.rerun()
+            elif drag_area['type'] == 'delete':
+                file_name_to_delete = drag_area['id']
+                st.session_state.files = [f for f in st.session_state.files if f['name'] != file_name_to_delete]
+                del st.session_state.shots_data[file_name_to_delete]
+                st.rerun()
+
+        with st.form("storyboard_form"):
+            st.write("---")
+            st.write("#### 📝 故事编织台")
+            cols = st.columns(3)
+            for i, file_data in enumerate(st.session_state.files):
+                with cols[i % 3]:
+                    file_name = file_data['name']
+                    shot_info = st.session_state.shots_data.get(file_name, {})
+                    st.caption(f"镜头 {i+1}")
+                    st.session_state.shots_data[file_name]['shot_type'] = st.selectbox("视角", SHOT_OPTIONS, index=SHOT_OPTIONS.index(shot_info.get('shot_type', "CU (特写)")), key=f"s_{file_name}")
+                    st.session_state.shots_data[file_name]['duration'] = st.number_input("秒", value=shot_info.get('duration', 2.0), step=0.5, key=f"d_{file_name}")
+                    st.session_state.shots_data[file_name]['desc'] = st.text_input("描述", value=shot_info.get('desc', ''), placeholder="动作...", key=f"t_{file_name}")
+
+            st.markdown("---")
+            submit_btn = st.form_submit_button("✨ 施展魔法 ✨", use_container_width=True)
+
+        if submit_btn:
+            with st.status("💎 魔法咏唱中...", expanded=True) as status:
+                st.write("🖼️ 正在构建专业分镜...")
+                
+                # ✨ 核心尺寸与布局修改 ✨
+                MAX_OUTPUT_WIDTH = 1280
+                border_width = 20 # 固定边框
+                
+                shots_data_to_generate = []
+                for file_data in st.session_state.files:
+                    shot_info = st.session_state.shots_data[file_data['name']]
+                    shots_data_to_generate.append({
+                        "bytes": file_data["bytes"],
+                        "shot_code": shot_info['shot_type'].split(" ")[0],
+                        "dur": shot_info['duration'],
+                        "desc": shot_info['desc']
+                    })
+
+                # 固定为 3x2 布局
+                cols_count = 3
+                rows_count = 2
+                
+                # 计算单格尺寸
+                single_w = (MAX_OUTPUT_WIDTH - (border_width * (cols_count + 1))) // cols_count
+                ratio_w, ratio_h = RATIOS[st.session_state.selected_ratio_name]
+                single_h = int(single_w * (ratio_h / ratio_w))
+                
+                bar_height = int(single_h * 0.15)
+                cell_h = single_h + bar_height
+                
+                # 计算总画布尺寸
+                total_w = MAX_OUTPUT_WIDTH
+                total_h = (cell_h * rows_count) + (border_width * (rows_count + 1))
+                
+                canvas = Image.new('RGB', (total_w, total_h), "#000000")
+                font = get_font(int(bar_height * 0.4))
+                
+                for idx, item in enumerate(shots_data_to_generate):
+                    if idx >= 6: break # 最多只画6张
+                    
+                    src = Image.open(io.BytesIO(item["bytes"]))
+                    src = ImageOps.fit(src, (single_w, single_h), method=Image.Resampling.LANCZOS)
+                    
+                    cell = Image.new('RGB', (single_w, cell_h), "#000000")
+                    cell.paste(src, (0, bar_height))
+                    
+                    info_text = f"KF{idx+1} [{item['shot_code']} | {item['dur']}s]"
+                    cdraw = ImageDraw.Draw(cell)
+                    cdraw.text((15, (bar_height - 30) / 2), info_text, fill="#FFFFFF", font=font)
+                    
+                    r, c = idx // cols_count, idx % cols_count
+                    x = border_width + (c * (single_w + border_width))
+                    y = border_width + (r * (cell_h + border_width))
+                    canvas.paste(cell, (x, y))
+                
+                buf = io.BytesIO()
+                canvas.save(buf, format="JPEG")
+                st.session_state.last_result = {"image_bytes": buf.getvalue(), "prompt": "Prompt generated here."}
+                status.update(label="✨ 魔法完成！", state="complete")
+
+    if st.session_state.last_result:
+        st.balloons()
+        st.info("结果展示区")
 
 if __name__ == "__main__":
     main()
