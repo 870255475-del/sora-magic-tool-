@@ -5,13 +5,14 @@ import os
 import gc
 import time
 from openai import OpenAI
+import streamlit.components.v1 as components
 import base64
 
 # ==========================================
 # 👇 0. 核心配置 👇
 # ==========================================
 st.set_page_config(
-    page_title="Miss Pink Elf's Studio v32.1 (Final Stable)", 
+    page_title="Miss Pink Elf's Studio v32.0 (Final Stable)", 
     layout="wide", 
     page_icon="🌸",
     initial_sidebar_state="expanded"
@@ -154,6 +155,8 @@ def render_sidebar():
         st.session_state.selected_ratio_name = st.selectbox("画幅比例", list(RATIOS.keys()))
         st.session_state.motion_strength = st.slider("⚡ 动态幅度", 1, 10, 5)
         st.session_state.neg_prompt = st.text_area("⛔ 负面提示词", value=DEFAULT_NEG, height=70)
+        st.markdown("---")
+        st.session_state.border_width = st.slider("🖼️ 间距", 0, 50, 20)
         st.markdown("---")
         with st.expander("☕ 打赏作者", expanded=False):
             if os.path.exists("pay.jpg"):
