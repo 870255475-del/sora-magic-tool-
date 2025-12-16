@@ -11,7 +11,7 @@ import math
 # 👇 0. 核心配置 👇
 # ==========================================
 st.set_page_config(
-    page_title="Miss Pink Elf's Studio v33.7 (Cover Fill Fix)",
+    page_title="Miss Pink Elf's Studio v34.0 (Pro Layout Fix)",
     layout="wide",
     page_icon="🌸",
     initial_sidebar_state="expanded"
@@ -56,14 +56,6 @@ def load_elysia_style():
         border-radius: 20px !important; border: none !important;
         box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4) !important;
     }
-    .feature-card {
-        background: rgba(255, 255, 255, 0.6);
-        border-radius: 20px; padding: 25px;
-        border: 2px solid #FFF;
-        box-shadow: 0 8px 20px rgba(255, 182, 193, 0.15);
-        text-align: center; height: 100%;
-    }
-    .emoji-icon { font-size: 3.5em; margin-bottom: 15px; display: block; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -129,28 +121,33 @@ def generate_sora_prompt_with_ai(api_key, base_url, model_name, global_style, ca
         return f"错误: 调用AI模型失败。请检查API Key、Base URL和网络连接。 {str(e)}"
 
 # ==========================================
-# 👇 2.1. 分镜图生成函数 👇
+# 👇 2.1. 【重构】分镜图生成函数 👇
 # ==========================================
 def create_storyboard(files_data, shots_info, border):
     """根据上传的图片和信息，生成一张符合专业格式的分镜图"""
     if not files_data:
         return None
 
-    # 第一步：创建比例正确的原始画布
+    # 第一步：定义布局和尺寸
     cols = 2
+    header_height = 40
+    
+    # 【核心修改】将每个单元格的画面尺寸严格设定为 1280x704 的比例 (20:11)
+    base_w = 640  # 以一个固定的宽度为基准
+    base_h = int(base_w * 704 / 1280) # 根据1280x704的比例计算高度
+    
+    # 第二步：创建原始画布
     num_images = len(files_data)
     rows = math.ceil(num_images / cols)
-    header_height = 40
-    base_w, base_h = (640, 360) # 保持16:9的单元格比例
     cell_h = base_h + header_height
     canvas_w = cols * base_w + (cols + 1) * border
     canvas_h = rows * cell_h + (rows + 1) * border
     
-    # 【修改】使用黑色背景
     canvas = Image.new('RGB', (canvas_w, canvas_h), (10, 10, 10)) 
     draw = ImageDraw.Draw(canvas)
     text_font = get_font(18)
 
+    # 第三步：遍历并将裁剪后的图片粘贴到画布上
     for i, file_data in enumerate(files_data):
         row, col = i // cols, i % cols
         x_start = col * base_w + (col + 1) * border
@@ -168,15 +165,16 @@ def create_storyboard(files_data, shots_info, border):
         text_x = x_start + 15
         text_y = y_start + (header_height - text_height) / 2
         draw.text((text_x, text_y), info_text, font=text_font, fill=(255, 255, 255))
+        
         img = Image.open(io.BytesIO(file_data['bytes']))
-        # 这一步确保每个单元格内的图片被无损裁剪填充
+        
+        # 【核心修改】在这里，将上传的图片智能裁剪为指定的 1280x704 比例
         img_thumb = ImageOps.fit(img, (base_w, base_h), Image.Resampling.LANCZOS)
+        
         canvas.paste(img_thumb, (x_start, y_start + header_height))
 
-    # 第二步：【核心修复】将整个画布智能裁剪并缩放，以填满1024x718的目标，不留黑边
-    final_image = ImageOps.fit(canvas, (1024, 718), Image.Resampling.LANCZOS)
-    
-    return final_image
+    # 第四步：直接返回原始画布，不再进行任何缩放或裁剪
+    return canvas
 
 
 # ==========================================
@@ -238,7 +236,7 @@ def render_hero_section():
 
 def main():
     render_sidebar()
-    st.title("Miss Pink Elf's Studio v33.7 (Cover Fill Fix)")
+    st.title("Miss Pink Elf's Studio v34.0 (Pro Layout Fix)")
 
     newly_uploaded_files = st.file_uploader(f"📂 **拖入图片 (最多 {MAX_FILES} 张)**", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True, key="uploader")
     if newly_uploaded_files:
@@ -351,7 +349,7 @@ def main():
 
             if st.session_state.last_result["image_bytes"]:
                 st.markdown("---")
-                st.markdown("### 🖼️ 生成的分镜总览 (填充式)")
+                st.markdown("### 🖼️ 生成的分镜总览 (专业画幅)")
                 st.image(st.session_state.last_result["image_bytes"], use_container_width=True)
 
 if __name__ == "__main__":
