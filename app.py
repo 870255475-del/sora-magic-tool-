@@ -10,7 +10,7 @@ from openai import OpenAI
 # 👇 0. 核心配置 👇
 # ==========================================
 st.set_page_config(
-    page_title="Miss Pink Elf's Studio v20.1 (Complete)", 
+    page_title="Miss Pink Elf's Studio v21.0 (Cache Fix)", 
     layout="wide", 
     page_icon="🌸",
     initial_sidebar_state="expanded"
@@ -121,8 +121,9 @@ def get_font(size):
             continue
     return ImageFont.load_default()
 
+# 🐞 核心修复：函数签名增加 file_name，让缓存机制能够区分不同文件
 @st.cache_data(show_spinner=False)
-def load_preview_image(_bytes):
+def load_preview_image(file_name, _bytes):
     image = Image.open(io.BytesIO(_bytes))
     if image.mode in ('RGBA', 'P'): image = image.convert('RGB')
     image.thumbnail((400, 400))
@@ -175,9 +176,8 @@ RATIOS = {"16:9 (电影)": (1920, 1080), "9:16 (抖音)": (1080, 1920), "2.35:1 
 DEFAULT_NEG = "morphing, distortion, bad anatomy, blurry, watermark, text, low quality, glitch, extra limbs"
 
 # ==========================================
-# 👇 4. UI 渲染函数 (封装) 👇
+# 👇 4. UI 渲染函数 👇
 # ==========================================
-
 def render_sidebar():
     with st.sidebar:
         if os.path.exists("elysia_cover.jpg"):
@@ -234,7 +234,8 @@ def render_workspace():
     for i, file_data in enumerate(st.session_state.files):
         with cols_sort[i % 4]:
             with st.container():
-                thumb = load_preview_image(file_data["bytes"])
+                # 🐞 核心修复：调用函数时，把文件名也传进去
+                thumb = load_preview_image(file_data["name"], file_data["bytes"])
                 st.image(thumb, use_container_width=True)
                 def move_item(index, direction):
                     if direction == "up" and index > 0: st.session_state.files.insert(index - 1, st.session_state.files.pop(index))
@@ -259,7 +260,6 @@ def render_workspace():
                 dur = st.number_input("秒", value=2.0, step=0.5, key=f"d_{i}", label_visibility="collapsed")
                 desc = st.text_input("描述", placeholder="动作...", key=f"t_{i}", label_visibility="collapsed")
                 shots_data.append({"bytes": file_data["bytes"], "shot_code": s_type, "dur": dur, "desc": desc})
-        
         st.markdown("---")
         col_btn1, col_btn2 = st.columns([2, 1])
         with col_btn1: submit_btn = st.form_submit_button("✨ 施展魔法 ✨", type="primary", use_container_width=True)
@@ -327,7 +327,7 @@ def render_workspace():
 # ==========================================
 def main():
     render_sidebar()
-    st.title("Miss Pink Elf's Studio v19.1")
+    st.title("Miss Pink Elf's Studio v21.0")
 
     uploaded_files_now = st.file_uploader(
         "📂 **拖入图片**", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True, key="uploader"
@@ -364,7 +364,7 @@ def main():
         with tab3:
             st.caption("本次会话的历史记录")
             for i, h in enumerate(reversed(st.session_state.history[:-1])):
-                with st.expander(f"🕒 记录 {h.get('time', i)}"):
+                with st.expander(f"🕒 记录 {h.get('time', 'N/A')}"):
                     st.image(h['image'], use_container_width=True)
                     if h['prompt']: st.code(h['prompt'])
 
