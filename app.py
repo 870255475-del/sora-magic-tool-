@@ -11,7 +11,7 @@ import math
 # 👇 0. 核心配置 👇
 # ==========================================
 st.set_page_config(
-    page_title="Miss Pink Elf's Studio v33.4 (Layout Update)",
+    page_title="Miss Pink Elf's Studio v33.5 (Final Fix)",
     layout="wide",
     page_icon="🌸",
     initial_sidebar_state="expanded"
@@ -129,69 +129,59 @@ def generate_sora_prompt_with_ai(api_key, base_url, model_name, global_style, ca
         return f"错误: 调用AI模型失败。请检查API Key、Base URL和网络连接。 {str(e)}"
 
 # ==========================================
-# 👇 2.1. 【重写】分镜图生成函数 👇
+# 👇 2.1. 分镜图生成函数 👇
 # ==========================================
 def create_storyboard(files_data, shots_info, border):
     """根据上传的图片和信息，生成一张符合专业格式的分镜图"""
     if not files_data:
         return None
 
-    # 1. 设置布局为2列
     cols = 2
     num_images = len(files_data)
     rows = math.ceil(num_images / cols)
 
-    # 2. 定义尺寸
-    header_height = 40  # 顶部标题栏高度
-    base_w, base_h = (640, 360)  # 每个镜头图片的16:9尺寸
-    cell_h = base_h + header_height # 每个单元格的总高度
+    header_height = 40
+    base_w, base_h = (640, 360)
+    cell_h = base_h + header_height
 
-    # 3. 计算画布总尺寸
     canvas_w = cols * base_w + (cols + 1) * border
     canvas_h = rows * cell_h + (rows + 1) * border
 
-    # 4. 创建画布
-    canvas = Image.new('RGB', (canvas_w, canvas_h), (255, 255, 255)) # 白色背景
+    canvas = Image.new('RGB', (canvas_w, canvas_h), (255, 255, 255))
     draw = ImageDraw.Draw(canvas)
     text_font = get_font(18)
 
-    # 5. 遍历并绘制每个镜头
     for i, file_data in enumerate(files_data):
         row = i // cols
         col = i % cols
 
-        # 计算每个单元格的左上角坐标 (包含标题栏)
         x_start = col * base_w + (col + 1) * border
         y_start = row * cell_h + (row + 1) * border
 
-        # 绘制黑色的标题栏背景
         draw.rectangle([x_start, y_start, x_start + base_w, y_start + header_height], fill=(10, 10, 10))
 
-        # 准备标题文本
         shot_data = shots_info[file_data['name']]
         shot_code = shot_data['shot_type'].split(" ")[0]
         duration = shot_data['duration']
-        info_text = f"KF{i+1} [{shot_code} | {duration:g}s]" # 使用:g来自动处理整数和小数
+        info_text = f"KF{i+1} [{shot_code} | {duration:g}s]"
 
-        # 计算文本尺寸以实现垂直居中
         try:
             text_bbox = draw.textbbox((0, 0), info_text, font=text_font)
             text_height = text_bbox[3] - text_bbox[1]
         except AttributeError:
-            # 兼容旧版Pillow
             _, text_height = draw.textsize(info_text, font=text_font)
 
-        # 绘制白色文本 (左对齐，垂直居中)
         text_x = x_start + 15
         text_y = y_start + (header_height - text_height) / 2
         draw.text((text_x, text_y), info_text, font=text_font, fill=(255, 255, 255))
 
-        # 加载、缩放并粘贴镜头图片 (位于标题栏下方)
         img = Image.open(io.BytesIO(file_data['bytes']))
         img_thumb = ImageOps.fit(img, (base_w, base_h), Image.Resampling.LANCZOS)
         canvas.paste(img_thumb, (x_start, y_start + header_height))
 
-    return canvas
+    # 【新增】严格调整最终输出尺寸为 1024x718
+    final_canvas = canvas.resize((1024, 718), Image.Resampling.LANCZOS)
+    return final_canvas
 
 
 # ==========================================
@@ -239,7 +229,7 @@ def render_sidebar():
         st.session_state.motion_strength = st.slider("⚡ 动态幅度", 1, 10, 5)
         st.session_state.neg_prompt = st.text_area("⛔ 负面提示词", value=DEFAULT_NEG, height=70)
         st.markdown("---")
-        st.session_state.border_width = st.slider("🖼️ 间距", 0, 50, 10) # 默认间距调小一些
+        st.session_state.border_width = st.slider("🖼️ 间距", 0, 50, 10)
         st.markdown("---")
         with st.expander("☕ 打赏作者", expanded=False):
             if os.path.exists("pay.jpg"):
@@ -253,7 +243,7 @@ def render_hero_section():
 
 def main():
     render_sidebar()
-    st.title("Miss Pink Elf's Studio v33.4")
+    st.title("Miss Pink Elf's Studio v33.5 (Final Fix)")
 
     newly_uploaded_files = st.file_uploader(f"📂 **拖入图片 (最多 {MAX_FILES} 张)**", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True, key="uploader")
     if newly_uploaded_files:
@@ -274,40 +264,47 @@ def main():
         st.caption("👇 在每个卡片中编辑信息，使用 ⬆️⬇️ 调整顺序，或点击 ❌ 删除")
         st.write("---")
 
-        cols = st.columns(3) # UI卡片仍然保持3列以节省屏幕空间
+        cols = st.columns(3)
 
-        def move_item(index, direction):
-            if direction == "up" and index > 0: st.session_state.files.insert(index - 1, st.session_state.files.pop(index))
-            elif direction == "down" and index < len(st.session_state.files) - 1: st.session_state.files.insert(index + 1, st.session_state.files.pop(index))
+        # 【BUG修复】回调函数现在接收文件名而不是索引
+        def move_item(file_name, direction):
+            # 通过文件名找到当前索引
+            index = next(i for i, item in enumerate(st.session_state.files) if item['name'] == file_name)
+            if direction == "up" and index > 0:
+                st.session_state.files.insert(index - 1, st.session_state.files.pop(index))
+            elif direction == "down" and index < len(st.session_state.files) - 1:
+                st.session_state.files.insert(index + 1, st.session_state.files.pop(index))
             st.rerun()
 
-        def delete_item(index):
-            file_name = st.session_state.files[index]['name']
+        def delete_item(file_name):
+            # 通过文件名找到当前索引
+            index = next(i for i, item in enumerate(st.session_state.files) if item['name'] == file_name)
             del st.session_state.shots_data[file_name]
             st.session_state.files.pop(index)
             st.rerun()
 
         for i, file_data in enumerate(st.session_state.files):
+            file_name = file_data['name'] # 提前获取文件名
             with cols[i % 3]:
                 with st.container():
                     st.markdown('<div class="card">', unsafe_allow_html=True)
-                    st.image(load_preview_image(file_data["name"], file_data["bytes"]), use_container_width=True)
+                    st.image(load_preview_image(file_name, file_data["bytes"]), use_container_width=True)
 
-                    file_name = file_data['name']
                     shot_info = st.session_state.shots_data.get(file_name, {})
-
                     st.caption(f"镜头 {i+1}: {file_name[:20]}")
 
-                    s_type = st.selectbox("视角", SHOT_OPTIONS, index=SHOT_OPTIONS.index(shot_info.get('shot_type', "MS (中景)")), key=f"s_{i}")
-                    dur = st.number_input("秒", value=shot_info.get('duration', 2.0), min_value=0.5, step=0.5, key=f"d_{i}")
-                    desc = st.text_input("描述", value=shot_info.get('desc', ''), placeholder="这个镜头里发生了什么...", key=f"t_{i}")
+                    # 【BUG修复】所有key都使用唯一的文件名
+                    s_type = st.selectbox("视角", SHOT_OPTIONS, index=SHOT_OPTIONS.index(shot_info.get('shot_type', "MS (中景)")), key=f"s_{file_name}")
+                    dur = st.number_input("秒", value=shot_info.get('duration', 2.0), min_value=0.5, step=0.5, key=f"d_{file_name}")
+                    desc = st.text_input("描述", value=shot_info.get('desc', ''), placeholder="这个镜头里发生了什么...", key=f"t_{file_name}")
 
                     st.session_state.shots_data[file_name] = {"shot_type": s_type, "duration": dur, "desc": desc}
 
                     c1, c2, c3 = st.columns([1,1,1])
-                    with c1: st.button("⬆️", key=f"up_{i}", on_click=move_item, args=(i, "up"), use_container_width=True, disabled=(i==0))
-                    with c2: st.button("⬇️", key=f"down_{i}", on_click=move_item, args=(i, "down"), use_container_width=True, disabled=(i==len(st.session_state.files)-1))
-                    with c3: st.button("❌", key=f"del_{i}", on_click=delete_item, args=(i,), use_container_width=True, type="primary")
+                    # 【BUG修复】on_click回调传递文件名
+                    with c1: st.button("⬆️", key=f"up_{file_name}", on_click=move_item, args=(file_name, "up"), use_container_width=True, disabled=(i==0))
+                    with c2: st.button("⬇️", key=f"down_{file_name}", on_click=move_item, args=(file_name, "down"), use_container_width=True, disabled=(i==len(st.session_state.files)-1))
+                    with c3: st.button("❌", key=f"del_{file_name}", on_click=delete_item, args=(file_name,), use_container_width=True, type="primary")
 
                     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -325,7 +322,6 @@ def main():
 
             with st.status("💎 魔法咏唱中...", expanded=True) as status:
                 status.write("🖼️ 正在构建专业分镜...")
-
                 canvas = create_storyboard(st.session_state.files, st.session_state.shots_data, st.session_state.border_width)
 
                 prompt_res = ""
@@ -350,7 +346,7 @@ def main():
 
                 buf = io.BytesIO()
                 if canvas:
-                    canvas.save(buf, format="JPEG")
+                    canvas.save(buf, format="JPEG", quality=95) # 使用高质量JPEG保存
                     image_bytes = buf.getvalue()
                 else:
                     image_bytes = None
@@ -370,7 +366,7 @@ def main():
 
             if st.session_state.last_result["image_bytes"]:
                 st.markdown("---")
-                st.markdown("### 🖼️ 生成的分镜总览")
+                st.markdown("### 🖼️ 生成的分镜总览 (1024x718)")
                 st.image(st.session_state.last_result["image_bytes"], use_container_width=True)
 
 if __name__ == "__main__":
