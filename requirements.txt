@@ -1,4 +1,4 @@
 streamlit
 openai
 Pillow
-streamlit-sortablejs
+streamlit-sortable
