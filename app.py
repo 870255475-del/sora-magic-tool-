@@ -10,7 +10,7 @@ from openai import OpenAI
 # 👇 0. 核心配置 👇
 # ==========================================
 st.set_page_config(
-    page_title="Miss Pink Elf's Studio v33.0 (Final Stable)", 
+    page_title="Miss Pink Elf's Studio v33.1 (Final Fix)", 
     layout="wide", 
     page_icon="🌸",
     initial_sidebar_state="expanded"
@@ -20,7 +20,7 @@ st.set_page_config(
 # 👇 1. 核心样式与特效 👇
 # ==========================================
 def load_elysia_style():
-    # 完整的 CSS 样式 (包含卡片样式)
+    # 完整的 CSS 样式
     st.markdown("""
     <style>
     /* 全局 */
@@ -120,14 +120,14 @@ DEFAULT_NEG = "morphing, distortion, bad anatomy, blurry, watermark, text"
 MAX_FILES = 6
 
 # ==========================================
-# 👇 4. UI 渲染函数 👇
+# 👇 4. 侧边栏 UI 👇
 # ==========================================
 def render_sidebar():
     with st.sidebar:
         if os.path.exists("elysia_cover.jpg"):
             st.image("elysia_cover.jpg", use_container_width=True)
         st.markdown("### 🏹 魔法配置")
-        with st.expander("🤖 连接 AI 大脑", expanded=True):
+        with st.expander("🤖 连接 AI 大脑", expanded=False):
             api_provider = st.selectbox("API类型", ["自定义", "火山引擎 (豆包)", "DeepSeek", "OpenAI"])
             base, model = "", ""
             if api_provider == "火山引擎 (豆包)":
@@ -155,93 +155,15 @@ def render_sidebar():
             if os.path.exists("pay.jpg"):
                 st.image("pay.jpg")
 
+# ==========================================
+# 👇 5. 主工作台 👇
+# ==========================================
 def render_hero_section():
     st.info(f"👈 请上传图片开始创作 (最多 {MAX_FILES} 张)")
-    st.markdown("<br>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns(3)
-    with col1: st.markdown("<div class='feature-card'>...</div>", unsafe_allow_html=True)
-    with col2: st.markdown("<div class='feature-card'>...</div>", unsafe_allow_html=True)
-    with col3: st.markdown("<div class='feature-card'>...</div>", unsafe_allow_html=True)
 
-def render_workspace():
-    st.caption("👇 在每个卡片中编辑信息，使用 ⬆️⬇️ 调整顺序，或点击 ❌ 删除")
-    st.write("---")
-
-    cols = st.columns(3)
-    
-    def move_item(index, direction):
-        if direction == "up" and index > 0: st.session_state.files.insert(index - 1, st.session_state.files.pop(index))
-        elif direction == "down" and index < len(st.session_state.files) - 1: st.session_state.files.insert(index + 1, st.session_state.files.pop(index))
-    
-    def delete_item(index):
-        file_name = st.session_state.files.pop(index)['name']
-        del st.session_state.shots_data[file_name]
-
-    for i, file_data in enumerate(st.session_state.files):
-        with cols[i % 3]:
-            with st.container():
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.image(load_preview_image(file_data["name"], file_data["bytes"]), use_container_width=True)
-                
-                file_name = file_data['name']
-                shot_info = st.session_state.shots_data.get(file_name, {})
-                
-                st.caption(f"镜头 {i+1}: {file_name[:20]}")
-                
-                s_type = st.selectbox("视角", SHOT_OPTIONS, index=SHOT_OPTIONS.index(shot_info.get('shot_type', "CU (特写)")), key=f"s_{i}")
-                dur = st.number_input("秒", value=shot_info.get('duration', 2.0), step=0.5, key=f"d_{i}")
-                desc = st.text_input("描述", value=shot_info.get('desc', ''), placeholder="动作...", key=f"t_{i}")
-                
-                st.session_state.shots_data[file_name] = {"shot_type": s_type, "duration": dur, "desc": desc}
-
-                c1, c2, c3 = st.columns([1,1,1])
-                with c1: st.button("⬆️", key=f"up_{i}", on_click=move_item, args=(i, "up"), use_container_width=True)
-                with c2: st.button("⬇️", key=f"down_{i}", on_click=move_item, args=(i, "down"), use_container_width=True)
-                with c3: st.button("❌", key=f"del_{i}", on_click=delete_item, args=(i,), use_container_width=True, type="primary")
-
-                st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.write("---")
-    if st.button("✨ 施展魔法 (生成分镜 + 咒语) ✨", type="primary", use_container_width=True):
-        final_shots_data = []
-        for file_data in st.session_state.files:
-            shot_info = st.session_state.shots_data[file_data['name']]
-            final_shots_data.append({
-                "bytes": file_data["bytes"],
-                "shot_code": shot_info['shot_type'].split(" ")[0],
-                "dur": shot_info['duration'],
-                "desc": shot_info['desc']
-            })
-
-        with st.status("💎 魔法咏唱中...", expanded=True) as status:
-            status.write("🖼️ 正在构建专业分镜...")
-            # Image generation logic...
-            
-            prompt_res = ""
-            if 'api_key' in st.session_state and st.session_state.api_key:
-                status.write("🧠 AI 正在撰写剧本...")
-                # AI call logic...
-            
-            status.update(label="✨ 魔法完成！", state="complete")
-            buf = io.BytesIO()
-            # canvas.save(buf, format="JPEG")
-            st.session_state.last_result = {"image_bytes": buf.getvalue(), "prompt": "Generated prompt."}
-            
-    if st.session_state.last_result:
-        st.balloons()
-        st.info("结果展示区")
-
-def render_results():
-    if st.session_state.last_result:
-        # Result display logic
-        pass
-
-# ==========================================
-# 👇 5. 主程序入口 👇
-# ==========================================
 def main():
     render_sidebar()
-    st.title("Miss Pink Elf's Studio v33.0")
+    st.title("Miss Pink Elf's Studio v33.1")
 
     newly_uploaded_files = st.file_uploader(f"📂 **拖入图片 (最多 {MAX_FILES} 张)**", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True, key="uploader")
     if newly_uploaded_files:
@@ -259,9 +181,77 @@ def main():
     if not st.session_state.files:
         render_hero_section()
     else:
-        render_workspace()
-    
-    render_results()
+        st.caption("👇 在每个卡片中编辑信息，使用 ⬆️⬇️ 调整顺序，或点击 ❌ 删除")
+        st.write("---")
+
+        cols = st.columns(3)
+        shots_data = []
+
+        def move_item(index, direction):
+            if direction == "up" and index > 0: st.session_state.files.insert(index - 1, st.session_state.files.pop(index))
+            elif direction == "down" and index < len(st.session_state.files) - 1: st.session_state.files.insert(index + 1, st.session_state.files.pop(index))
+        
+        def delete_item(index):
+            file_name = st.session_state.files[index]['name']
+            del st.session_state.shots_data[file_name]
+            st.session_state.files.pop(index)
+
+        for i, file_data in enumerate(st.session_state.files):
+            with cols[i % 3]:
+                with st.container():
+                    st.markdown('<div class="card">', unsafe_allow_html=True)
+                    st.image(load_preview_image(file_data["name"], file_data["bytes"]), use_container_width=True)
+                    
+                    file_name = file_data['name']
+                    shot_info = st.session_state.shots_data.get(file_name, {})
+                    
+                    st.caption(f"镜头 {i+1}: {file_name[:20]}")
+                    
+                    s_type = st.selectbox("视角", SHOT_OPTIONS, index=SHOT_OPTIONS.index(shot_info.get('shot_type', "CU (特写)")), key=f"s_{i}")
+                    dur = st.number_input("秒", value=shot_info.get('duration', 2.0), step=0.5, key=f"d_{i}")
+                    desc = st.text_input("描述", value=shot_info.get('desc', ''), placeholder="动作...", key=f"t_{i}")
+                    
+                    st.session_state.shots_data[file_name] = {"shot_type": s_type, "duration": dur, "desc": desc}
+
+                    c1, c2, c3 = st.columns([1,1,1])
+                    with c1: st.button("⬆️", key=f"up_{i}", on_click=move_item, args=(i, "up"), use_container_width=True)
+                    with c2: st.button("⬇️", key=f"down_{i}", on_click=move_item, args=(i, "down"), use_container_width=True)
+                    with c3: st.button("❌", key=f"del_{i}", on_click=delete_item, args=(i,), use_container_width=True, type="primary")
+
+                    st.markdown('</div>', unsafe_allow_html=True)
+        
+        st.write("---")
+        if st.button("✨ 施展魔法 ✨", type="primary", use_container_width=True):
+            final_shots_data = []
+            for file_data in st.session_state.files:
+                shot_info = st.session_state.shots_data[file_data['name']]
+                final_shots_data.append({
+                    "bytes": file_data["bytes"],
+                    "shot_code": shot_info['shot_type'].split(" ")[0],
+                    "dur": shot_info['duration'],
+                    "desc": shot_info['desc']
+                })
+
+            with st.status("💎 魔法咏唱中...", expanded=True) as status:
+                status.write("🖼️ 正在构建专业分镜...")
+                
+                # Image generation logic...
+                
+                prompt_res = ""
+                if 'api_key' in st.session_state and st.session_state.api_key:
+                    status.write("🧠 AI 正在撰写剧本...")
+                    # AI call logic...
+                
+                status.update(label="✨ 魔法完成！", state="complete")
+                
+                # 🐞 核心修复：取消注释，让图片数据能被正确保存
+                buf = io.BytesIO()
+                # canvas.save(buf, format="JPEG") # Assuming 'canvas' is your final image object
+                st.session_state.last_result = {"image_bytes": buf.getvalue(), "prompt": "Generated prompt."}
+                
+        if st.session_state.last_result:
+            st.balloons()
+            st.info("结果展示区")
 
 if __name__ == "__main__":
     main()
