@@ -10,7 +10,7 @@ from openai import OpenAI
 # 👇 0. 核心配置 👇
 # ==========================================
 st.set_page_config(
-    page_title="Miss Pink Elf's Studio v32.2 (Final Stable)", 
+    page_title="Miss Pink Elf's Studio v33.0 (Minimalist)", 
     layout="wide", 
     page_icon="🌸",
     initial_sidebar_state="expanded"
@@ -55,14 +55,6 @@ def load_elysia_style():
         border-radius: 20px !important; border: none !important;
         box-shadow: 0 4px 12px rgba(255, 107, 107, 0.4) !important;
     }
-    .feature-card {
-        background: rgba(255, 255, 255, 0.6);
-        border-radius: 20px; padding: 25px;
-        border: 2px solid #FFF;
-        box-shadow: 0 8px 20px rgba(255, 182, 193, 0.15);
-        text-align: center; height: 100%;
-    }
-    .emoji-icon { font-size: 3.5em; margin-bottom: 15px; display: block; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -149,8 +141,6 @@ def render_sidebar():
         st.session_state.motion_strength = st.slider("⚡ 动态幅度", 1, 10, 5)
         st.session_state.neg_prompt = st.text_area("⛔ 负面提示词", value=DEFAULT_NEG, height=70)
         st.markdown("---")
-        st.session_state.border_width = st.slider("🖼️ 间距", 0, 50, 20)
-        st.markdown("---")
         with st.expander("☕ 打赏作者", expanded=False):
             if os.path.exists("pay.jpg"):
                 st.image("pay.jpg")
@@ -158,24 +148,15 @@ def render_sidebar():
 # ==========================================
 # 👇 5. 主工作台 👇
 # ==========================================
-def render_hero_section():
-    st.info(f"👈 请上传图片开始创作 (最多 {MAX_FILES} 张)")
-    st.markdown("<br>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns(3)
-    with col1: st.markdown("<div class='feature-card'>...</div>", unsafe_allow_html=True)
-    with col2: st.markdown("<div class='feature-card'>...</div>", unsafe_allow_html=True)
-    with col3: st.markdown("<div class='feature-card'>...</div>", unsafe_allow_html=True)
-
 def main():
     render_sidebar()
-    st.title("Miss Pink Elf's Studio v32.2")
+    st.title("Miss Pink Elf's Studio v33.0")
 
     newly_uploaded_files = st.file_uploader(f"📂 **拖入图片 (最多 {MAX_FILES} 张)**", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True, key="uploader")
     if newly_uploaded_files:
         if len(st.session_state.files) >= MAX_FILES:
             st.warning(f"最多只能上传 {MAX_FILES} 张图片！")
         else:
-            # 🐞 核心修复：修正拼写错误
             existing_names = {f['name'] for f in st.session_state.files}
             files_to_add = [f for f in newly_uploaded_files if f.name not in existing_names][:MAX_FILES - len(st.session_state.files)]
             for file in files_to_add:
@@ -185,7 +166,7 @@ def main():
                 st.rerun()
 
     if not st.session_state.files:
-        render_hero_section()
+        st.info("👈 请在上方拖入图片，开始你的创作之旅吧！")
     else:
         st.caption("👇 在每个卡片中编辑信息，使用 ⬆️⬇️ 调整顺序，或点击 ❌ 删除")
         st.write("---")
