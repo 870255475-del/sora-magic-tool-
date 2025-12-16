@@ -12,7 +12,7 @@ import base64
 # 👇 0. 核心配置 👇
 # ==========================================
 st.set_page_config(
-    page_title="Miss Pink Elf's Studio v30.1 (Final)", 
+    page_title="Miss Pink Elf's Studio v30.0 (Ultimate)", 
     layout="wide", 
     page_icon="🌸",
     initial_sidebar_state="expanded"
@@ -32,10 +32,10 @@ def load_elysia_style():
     /* 侧边栏 */
     section[data-testid="stSidebar"] { background-color: rgba(255, 255, 255, 0.75); backdrop-filter: blur(20px); }
 
-    /* 拖拽容器 */
+    /* ✨ 拖拽容器 (关键) */
     .dnd-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
     
-    /* 拖拽卡片 */
+    /* ✨ 拖拽卡片 (关键) */
     .dnd-item {
         position: relative;
         background: rgba(255,255,255,0.7);
@@ -44,10 +44,10 @@ def load_elysia_style():
         box-shadow: 0 6px 20px rgba(0,0,0,0.05);
         border: 2px solid transparent;
         transition: all 0.3s ease;
-        cursor: grab;
+        cursor: grab; /* 抓取手势 */
     }
     .dnd-item:hover { border-color: #FFB6C1; }
-    .dnd-item:active { cursor: grabbing; }
+    .dnd-item:active { cursor: grabbing; } /* 抓取中手势 */
 
     /* 拖拽占位符 */
     .sortable-ghost { background: #FFC0CB; opacity: 0.4; border-radius: 18px; }
@@ -188,9 +188,9 @@ def render_hero_section():
     st.info(f"👈 请上传图片开始创作 (最多 {MAX_FILES} 张)")
     st.markdown("<br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns(3)
-    with col1: st.markdown("<div class='feature-card'>...</div>", unsafe_allow_html=True)
-    with col2: st.markdown("<div class='feature-card'>...</div>", unsafe_allow_html=True)
-    with col3: st.markdown("<div class='feature-card'>...</div>", unsafe_allow_html=True)
+    with col1: st.markdown("<div class='feature-card'><span class='emoji-icon'>🧠</span><h3>Sora 2 内核</h3><p>优化的物理引擎提示词</p></div>", unsafe_allow_html=True)
+    with col2: st.markdown("<div class='feature-card'><span class='emoji-icon'>🎬</span><h3>AI 导演</h3><p>自动编写时间轴剧本</p></div>", unsafe_allow_html=True)
+    with col3: st.markdown("<div class='feature-card'><span class='emoji-icon'>🌸</span><h3>唯美体验</h3><p>丝滑预览与拖拽排序</p></div>", unsafe_allow_html=True)
 
 def main():
     render_sidebar()
