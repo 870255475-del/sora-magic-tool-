@@ -191,4 +191,75 @@ with st.sidebar:
     motion_strength = st.slider("⚡ 动态幅度", 1, 10, 5)
     neg_prompt = st.text_area("⛔ 负面提示词", value=DEFAULT_NEG, height=70)
     st.markdown("---")
-    c1,
+    c1, c2 = st.columns(2)
+    with c1: border_width = st.slider("间距", 0, 30, 15)
+    with c2: output_quality = st.select_slider("画质", ["2K", "4K"], value="2K")
+    scale_factor = 1.5 if output_quality == "4K" else 1.0
+    st.markdown("---")
+    with st.expander("☕ 打赏作者 (小费)", expanded=False):
+        if os.path.exists("pay.jpg"):
+            st.image("pay.jpg", caption="投喂灵感~", use_container_width=True)
+        else:
+            st.info("（等待投喂中...）")
+
+# ==========================================
+# 5. Main Stage
+# ==========================================
+st.title("Miss Pink Elf's Studio v14.0 (Stable)")
+def on_upload():
+    for f in st.session_state.uploader:
+        st.session_state.files.append({"name": f.name, "bytes": f.getvalue()})
+st.file_uploader("📂 **拖入图片**", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True, key="uploader", on_change=on_upload)
+
+if not st.session_state.files:
+    st.markdown("<br>", unsafe_allow_html=True)
+    # ... Hero section HTML ...
+else:
+    st.caption("👇 使用图片下方的 ⬆️⬇️ 按钮调整顺序，或勾选后批量删除")
+    with st.form("storyboard_form"):
+        shots_data = []
+        cols = st.columns(4)
+        delete_flags = {}
+        def move_item(index, direction):
+            if direction == "up" and index > 0:
+                st.session_state.files.insert(index - 1, st.session_state.files.pop(index))
+            elif direction == "down" and index < len(st.session_state.files) - 1:
+                st.session_state.files.insert(index + 1, st.session_state.files.pop(index))
+        
+        for i, file_data in enumerate(st.session_state.files):
+            with cols[i % 4]:
+                with st.container():
+                    thumb = load_preview_image(file_data["bytes"])
+                    st.image(thumb, use_container_width=True)
+                    c1, c2, c3, c4 = st.columns([1, 1, 1, 3])
+                    with c1: st.button("⬆️", key=f"up_{i}", on_click=move_item, args=(i, "up"), help="上移")
+                    with c2: st.button("⬇️", key=f"down_{i}", on_click=move_item, args=(i, "down"), help="下移")
+                    with c3: delete_flags[i] = st.checkbox("", key=f"del_{i}", help="勾选待删除")
+                    s_type = st.selectbox("视角", ["CU", "MS", "LS"], key=f"s_{i}", label_visibility="collapsed")
+                    dur = st.number_input("秒", value=2.0, step=0.5, key=f"d_{i}", label_visibility="collapsed")
+                    desc = st.text_input("描述", placeholder="动作...", key=f"t_{i}", label_visibility="collapsed")
+                    shots_data.append({"bytes": file_data["bytes"], "shot_code": s_type, "dur": dur, "desc": desc})
+        
+        st.markdown("---")
+        col_btn1, col_btn2 = st.columns([2, 1])
+        with col_btn1: submit_btn = st.form_submit_button("✨ 施展魔法 ✨", type="primary", use_container_width=True)
+        with col_btn2: delete_submit_btn = st.form_submit_button("🗑️ 删除选中", use_container_width=True)
+
+    if delete_submit_btn:
+        indices_to_delete = sorted([i for i, checked in delete_flags.items() if checked], reverse=True)
+        for i in indices_to_delete:
+            del st.session_state.files[i]
+        st.success(f"已删除 {len(indices_to_delete)} 张图片！")
+        time.sleep(1)
+        st.rerun()
+
+    if submit_btn:
+        with st.status("💎 魔法咏唱中...", expanded=True) as status:
+            # ... Image generation logic ...
+            status.update(label="✨ 魔法完成！", state="complete")
+            # ... Save to session state ...
+            st.session_state.last_result = {"image": "canvas_placeholder", "prompt": "prompt_placeholder"}
+            
+    if st.session_state.last_result:
+        # ... Result display logic ...
+        st.balloons()
