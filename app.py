@@ -11,7 +11,7 @@ import math
 # 👇 0. 核心配置 👇
 # ==========================================
 st.set_page_config(
-    page_title="Miss Pink Elf's Studio v33.6 (Aspect Ratio Fix)",
+    page_title="Miss Pink Elf's Studio v33.7 (Cover Fill Fix)",
     layout="wide",
     page_icon="🌸",
     initial_sidebar_state="expanded"
@@ -141,11 +141,13 @@ def create_storyboard(files_data, shots_info, border):
     num_images = len(files_data)
     rows = math.ceil(num_images / cols)
     header_height = 40
-    base_w, base_h = (640, 360)
+    base_w, base_h = (640, 360) # 保持16:9的单元格比例
     cell_h = base_h + header_height
     canvas_w = cols * base_w + (cols + 1) * border
     canvas_h = rows * cell_h + (rows + 1) * border
-    canvas = Image.new('RGB', (canvas_w, canvas_h), (255, 255, 255))
+    
+    # 【修改】使用黑色背景
+    canvas = Image.new('RGB', (canvas_w, canvas_h), (10, 10, 10)) 
     draw = ImageDraw.Draw(canvas)
     text_font = get_font(18)
 
@@ -167,34 +169,14 @@ def create_storyboard(files_data, shots_info, border):
         text_y = y_start + (header_height - text_height) / 2
         draw.text((text_x, text_y), info_text, font=text_font, fill=(255, 255, 255))
         img = Image.open(io.BytesIO(file_data['bytes']))
+        # 这一步确保每个单元格内的图片被无损裁剪填充
         img_thumb = ImageOps.fit(img, (base_w, base_h), Image.Resampling.LANCZOS)
         canvas.paste(img_thumb, (x_start, y_start + header_height))
 
-    # 第二步：【BUG修复】将原始画布无损地嵌入到 1024x718 的最终画布中
-    target_w, target_h = 1024, 718
-    original_w, original_h = canvas.size
+    # 第二步：【核心修复】将整个画布智能裁剪并缩放，以填满1024x718的目标，不留黑边
+    final_image = ImageOps.fit(canvas, (1024, 718), Image.Resampling.LANCZOS)
     
-    # 计算缩放比例，确保图像能完整放入目标框内
-    scale = min(target_w / original_w, target_h / original_h)
-    
-    # 计算缩放后的新尺寸
-    new_w = int(original_w * scale)
-    new_h = int(original_h * scale)
-    
-    # 使用高质量算法进行缩放
-    resized_canvas = canvas.resize((new_w, new_h), Image.Resampling.LANCZOS)
-    
-    # 创建一个黑色的最终画布
-    final_canvas = Image.new('RGB', (target_w, target_h), (10, 10, 10))
-    
-    # 计算粘贴位置，使其居中
-    paste_x = (target_w - new_w) // 2
-    paste_y = (target_h - new_h) // 2
-    
-    # 将缩放后的图像粘贴到最终画布的中央
-    final_canvas.paste(resized_canvas, (paste_x, paste_y))
-    
-    return final_canvas
+    return final_image
 
 
 # ==========================================
@@ -256,7 +238,7 @@ def render_hero_section():
 
 def main():
     render_sidebar()
-    st.title("Miss Pink Elf's Studio v33.6 (Aspect Ratio Fix)")
+    st.title("Miss Pink Elf's Studio v33.7 (Cover Fill Fix)")
 
     newly_uploaded_files = st.file_uploader(f"📂 **拖入图片 (最多 {MAX_FILES} 张)**", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True, key="uploader")
     if newly_uploaded_files:
@@ -299,21 +281,16 @@ def main():
                 with st.container():
                     st.markdown('<div class="card">', unsafe_allow_html=True)
                     st.image(load_preview_image(file_name, file_data["bytes"]), use_container_width=True)
-
                     shot_info = st.session_state.shots_data.get(file_name, {})
                     st.caption(f"镜头 {i+1}: {file_name[:20]}")
-
                     s_type = st.selectbox("视角", SHOT_OPTIONS, index=SHOT_OPTIONS.index(shot_info.get('shot_type', "MS (中景)")), key=f"s_{file_name}")
                     dur = st.number_input("秒", value=shot_info.get('duration', 2.0), min_value=0.5, step=0.5, key=f"d_{file_name}")
                     desc = st.text_input("描述", value=shot_info.get('desc', ''), placeholder="这个镜头里发生了什么...", key=f"t_{file_name}")
-
                     st.session_state.shots_data[file_name] = {"shot_type": s_type, "duration": dur, "desc": desc}
-
                     c1, c2, c3 = st.columns([1,1,1])
                     with c1: st.button("⬆️", key=f"up_{file_name}", on_click=move_item, args=(file_name, "up"), use_container_width=True, disabled=(i==0))
                     with c2: st.button("⬇️", key=f"down_{file_name}", on_click=move_item, args=(file_name, "down"), use_container_width=True, disabled=(i==len(st.session_state.files)-1))
                     with c3: st.button("❌", key=f"del_{file_name}", on_click=delete_item, args=(file_name,), use_container_width=True, type="primary")
-
                     st.markdown('</div>', unsafe_allow_html=True)
 
         st.write("---")
@@ -374,7 +351,7 @@ def main():
 
             if st.session_state.last_result["image_bytes"]:
                 st.markdown("---")
-                st.markdown("### 🖼️ 生成的分镜总览 (1024x718)")
+                st.markdown("### 🖼️ 生成的分镜总览 (填充式)")
                 st.image(st.session_state.last_result["image_bytes"], use_container_width=True)
 
 if __name__ == "__main__":
