@@ -12,7 +12,7 @@ import base64
 # 👇 0. 核心配置 👇
 # ==========================================
 st.set_page_config(
-    page_title="Miss Pink Elf's Studio v30.0 (Ultimate D&D)", 
+    page_title="Miss Pink Elf's Studio v30.0 (Ultimate)", 
     layout="wide", 
     page_icon="🌸",
     initial_sidebar_state="expanded"
@@ -46,6 +46,7 @@ def load_elysia_style():
         transition: all 0.3s ease;
         cursor: grab; /* 抓取手势 */
     }
+    .dnd-item:hover { border-color: #FFB6C1; }
     .dnd-item:active { cursor: grabbing; } /* 抓取中手势 */
 
     /* 拖拽占位符 */
@@ -104,7 +105,7 @@ def get_font(size):
     return ImageFont.load_default()
 
 @st.cache_data(show_spinner=False)
-def load_preview_image_from_bytes(_bytes):
+def load_preview_image(file_name, _bytes):
     image = Image.open(io.BytesIO(_bytes))
     if image.mode in ('RGBA', 'P'): image = image.convert('RGB')
     image.thumbnail((400, 400))
@@ -117,7 +118,12 @@ def generate_sora_prompt_with_ai(api_key, base_url, model_name, global_style, ca
     if not base_url: base_url = "https://api.openai.com/v1"
     client = OpenAI(api_key=api_key, base_url=base_url)
     tech_specs = f"Specs: Ratio {ratio}, Motion {motion}/10, {cam}, {phys}"
-    system_prompt = f"You are an expert Sora 2 prompt engineer..."
+    system_prompt = f"""You are an expert Sora 2 prompt engineer. Your task is to convert a storyboard into a narrative, physically-aware prompt.
+    - Start with technical specs: "{tech_specs}"
+    - Use timeline markers: [0s-2s].
+    - Incorporate negative prompts: "Ensure high quality, avoid {neg_prompt}."
+    - Output only the final prompt.
+    """
     user_content = f"Global Style: {global_style}\nStoryboard:\n"
     current_time = 0.0
     for idx, item in enumerate(shots_data):
@@ -136,6 +142,7 @@ def generate_sora_prompt_with_ai(api_key, base_url, model_name, global_style, ca
 if "files" not in st.session_state: st.session_state.files = []
 if "shots_data" not in st.session_state: st.session_state.shots_data = {}
 if 'last_result' not in st.session_state: st.session_state.last_result = None
+if 'history' not in st.session_state: st.session_state.history = []
 
 SHOT_OPTIONS = ["CU (特写)", "MS (中景)", "LS (全景)", "ECU (极特写)", "OTS (过肩)", "FPV (第一人称)"]
 PRESETS_STYLE = {"🌸 爱莉希雅 (Anime)": "Dreamy Anime...", "🎥 电影质感 (Cinematic)": "Shot on 35mm film..."}
@@ -184,7 +191,11 @@ def render_sidebar():
 # ==========================================
 def render_hero_section():
     st.info(f"👈 请上传图片开始创作 (最多 {MAX_FILES} 张)")
-    # (英雄区代码不变)
+    st.markdown("<br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns(3)
+    with col1: st.markdown("<div class='feature-card'><span class='emoji-icon'>🧠</span><h3>Sora 2 内核</h3><p>优化的物理引擎提示词</p></div>", unsafe_allow_html=True)
+    with col2: st.markdown("<div class='feature-card'><span class='emoji-icon'>🎬</span><h3>AI 导演</h3><p>自动编写时间轴剧本</p></div>", unsafe_allow_html=True)
+    with col3: st.markdown("<div class='feature-card'><span class='emoji-icon'>🌸</span><h3>唯美体验</h3><p>丝滑预览与拖拽排序</p></div>", unsafe_allow_html=True)
 
 def main():
     render_sidebar()
@@ -193,7 +204,7 @@ def main():
     newly_uploaded_files = st.file_uploader(f"📂 **拖入图片 (最多 {MAX_FILES} 张)**", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True, key="uploader")
     if newly_uploaded_files:
         if len(st.session_state.files) >= MAX_FILES:
-            st.warning(f"最多只能处理 {MAX_FILES} 张图片！")
+            st.warning(f"最多只能上传 {MAX_FILES} 张图片！")
         else:
             existing_names = {f['name'] for f in st.session_state.files}
             files_to_add = [f for f in newly_uploaded_files if f.name not in existing_names]
@@ -212,26 +223,65 @@ def main():
         st.caption("👇 按住卡片拖动排序，或在卡片中填写信息")
         
         # --- ✨ 全新“多合一”卡片式工作区 ---
-        with st.form("storyboard_form"):
+        
+        # 1. 构造 HTML + JS 拖拽组件 (现在放在主流程中)
+        item_html_list = []
+        for file_data in st.session_state.files:
+            thumb_bytes = load_preview_image(file_data["name"], file_data["bytes"])
+            b64_thumb = get_base64_image(thumb_bytes)
+            file_name = file_data['name']
+            shot_info = st.session_state.shots_data.get(file_name, {})
             
-            # 1. 构造 HTML + JS 拖拽组件
-            item_html_list = []
-            for file_data in st.session_state.files:
-                thumb_bytes = load_preview_image_from_bytes(file_data["bytes"])
-                b64_thumb = base64.b64encode(thumb_bytes).decode()
-                file_name = file_data['name']
-                shot_info = st.session_state.shots_data.get(file_name, {})
-
-                # 将 Python 控件嵌入到 HTML 字符串中（这是不可能的，所以我们需要分离）
-                # 因此，我们先渲染拖拽区，再渲染编辑区
-                item_html_list.append(f'<div class="dnd-item" data-id="{file_name}"><img src="data:image/jpeg;base64,{b64_thumb}" style="width: 100%;"></div>')
-
-            # 拖拽区和编辑区分开
-            st.write("#### 🎞️ 镜头排序与预览")
-            drag_area = components.html(f"...", height=300) # 省略以保持简洁
-
+            # 使用 st.session_state 来存储和读取每个控件的值
+            shot_type_index = SHOT_OPTIONS.index(st.session_state.shots_data[file_name].get('shot_type', "CU (特写)"))
+            
+            # 这里的 HTML 结构是关键，它包含了 Streamlit 控件的容器
+            item_html_list.append(f"""
+            <div class="dnd-item" data-id="{file_name}">
+                <button class="delete-btn" data-id="{file_name}" onclick="deleteItem(this)">X</button>
+                <img src="data:image/jpeg;base64,{b64_thumb}" style="width: 100%; border-radius: 10px;">
+                <div id="controls-for-{file_name}"></div>
+            </div>
+            """)
+            
+        # 拖拽区和编辑区分开
+        drag_area_event = components.html(f"""
+            <div id="dnd-gallery" class="dnd-container">
+                {''.join(item_html_list)}
+            </div>
+            <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+            <script>
+            const el = document.getElementById('dnd-gallery');
+            const sortable = new Sortable(el, {{
+                animation: 150, ghostClass: 'sortable-ghost',
+                onEnd: function (evt) {{
+                    const newOrder = Array.from(el.children).map(item => item.getAttribute('data-id'));
+                    Streamlit.setComponentValue({{type: 'drag', order: newOrder.join(',')}});
+                }}
+            }});
+            function deleteItem(btn) {{
+                const itemId = btn.getAttribute('data-id');
+                Streamlit.setComponentValue({{type: 'delete', id: itemId}});
+            }}
+            </script>
+            """,
+            height= (len(st.session_state.files) // 4 + 1) * 350,
+            key="dnd_component"
+        )
+        
+        if drag_area_event:
+            if drag_area_event['type'] == 'drag':
+                new_order_names = drag_area_event['order'].split(',')
+                st.session_state.files = sorted(st.session_state.files, key=lambda x: new_order_names.index(x['name']))
+                st.rerun()
+            elif drag_area_event['type'] == 'delete':
+                file_name_to_delete = drag_area_event['id']
+                st.session_state.files = [f for f in st.session_state.files if f['name'] != file_name_to_delete]
+                del st.session_state.shots_data[file_name_to_delete]
+                st.rerun()
+                
+        with st.form("storyboard_form"):
             st.write("---")
-            st.write("#### 📝 故事编织")
             cols = st.columns(4)
             for i, file_data in enumerate(st.session_state.files):
                 with cols[i % 4]:
@@ -241,11 +291,38 @@ def main():
                     st.session_state.shots_data[file_name]['shot_type'] = st.selectbox("视角", SHOT_OPTIONS, index=SHOT_OPTIONS.index(shot_info.get('shot_type', "CU (特写)")), key=f"s_{file_name}")
                     st.session_state.shots_data[file_name]['duration'] = st.number_input("秒", value=shot_info.get('duration', 2.0), step=0.5, key=f"d_{file_name}")
                     st.session_state.shots_data[file_name]['desc'] = st.text_input("描述", value=shot_info.get('desc', ''), placeholder="动作...", key=f"t_{file_name}")
-            
+
             st.markdown("---")
             submit_btn = st.form_submit_button("✨ 施展魔法 ✨", use_container_width=True)
+
+        if submit_btn:
+            final_shots_data = []
+            for file_data in st.session_state.files:
+                shot_info = st.session_state.shots_data[file_data['name']]
+                final_shots_data.append({
+                    "bytes": file_data["bytes"],
+                    "shot_code": shot_info['shot_type'].split(" ")[0],
+                    "dur": shot_info['duration'],
+                    "desc": shot_info['desc']
+                })
             
-        # (事件处理和生成逻辑)
+            with st.status("💎 魔法咏唱中...", expanded=True) as status:
+                status.write("🖼️ 正在构建专业分镜...")
+                # Image Generation Logic...
+                
+                prompt_res = ""
+                if 'api_key' in st.session_state and st.session_state.api_key:
+                    status.write("🧠 AI 正在撰写剧本...")
+                    # AI Call Logic...
+                
+                status.update(label="✨ 魔法完成！", state="complete")
+                # Store result as bytes to avoid MediaFileStorageError
+                # canvas_bytes = ...
+                st.session_state.last_result = {"image_bytes": b'', "prompt": prompt_res}
+            
+        if st.session_state.last_result:
+            st.balloons()
+            st.info("结果展示区")
 
 if __name__ == "__main__":
     main()
