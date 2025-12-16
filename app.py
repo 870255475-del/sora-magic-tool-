@@ -1,44 +1,36 @@
-import sys
-import os
-import subprocess
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import io
+import os
 import gc
+import time
 import random
 from openai import OpenAI
 
 # ==========================================
-# 👇 0. 启动引导 & 环境配置 👇
+# 👇 0. 核心配置 (直接启动，无需 subprocess) 👇
 # ==========================================
-if __name__ == '__main__':
-    if "STREAMLIT_subprocess_FLAG" not in os.environ:
-        script_path = os.path.abspath(__file__)
-        cmd = [sys.executable, "-m", "streamlit", "run", script_path]
-        new_env = os.environ.copy()
-        new_env["STREAMLIT_subprocess_FLAG"] = "true"
-        try:
-            subprocess.run(cmd, env=new_env)
-        except KeyboardInterrupt:
-            pass
-        sys.exit(0)
+st.set_page_config(
+    page_title="Miss Pink Elf's Studio v10.0", 
+    layout="wide", 
+    page_icon="🌸",
+    initial_sidebar_state="expanded"
+)
 
 # ==========================================
-# 👇 1. UI 界面 (爱莉希雅皮肤 - 仅影响网页外观) 👇
+# 👇 1. 核心样式与特效 (CSS/JS) 👇
 # ==========================================
-st.set_page_config(page_title="Miss Pink Elf's Sora Studio", layout="wide", page_icon="🌸")
-
 def load_elysia_style():
     sakura_css = """
     <style>
-    /* 网页背景保持粉色唯美 */
+    /* 全局优化 */
     .stApp {
         background: linear-gradient(135deg, #FFF0F5 0%, #E6E6FA 60%, #E0FFFF 100%);
         font-family: 'Comic Sans MS', 'Microsoft YaHei', sans-serif;
         color: #4A4A4A;
     }
     
-    /* 樱花容器 */
+    /* 樱花容器 (防遮挡优化) */
     .sakura-container {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         pointer-events: none; z-index: 0; overflow: hidden;
@@ -54,7 +46,7 @@ def load_elysia_style():
         100% { opacity: 0; top: 100%; transform: translateX(200px) rotate(720deg); }
     }
 
-    /* 侧边栏玻璃拟态 */
+    /* 侧边栏进化：玻璃拟态 v2.0 */
     section[data-testid="stSidebar"] {
         background-color: rgba(255, 255, 255, 0.75);
         backdrop-filter: blur(20px);
@@ -69,6 +61,7 @@ def load_elysia_style():
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: 900 !important;
+        letter-spacing: 1px;
     }
     
     /* 卡片悬浮特效 */
@@ -84,17 +77,23 @@ def load_elysia_style():
         transform: translateY(-8px) scale(1.02);
         background: rgba(255, 255, 255, 0.95);
         border-color: #FF69B4;
+        box-shadow: 0 15px 30px rgba(255, 105, 180, 0.3);
     }
     .emoji-icon { font-size: 3.5em; margin-bottom: 15px; display: block; animation: float 3s ease-in-out infinite; }
     @keyframes float { 0% {transform: translateY(0px);} 50% {transform: translateY(-10px);} 100% {transform: translateY(0px);} }
 
-    /* 输入框 */
+    /* 控件极致美化 */
     .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] {
         border-radius: 12px !important; border: 2px solid #FFE4E1 !important;
         background: rgba(255, 255, 255, 0.85) !important;
+        transition: border-color 0.3s;
+    }
+    .stTextInput input:focus, .stNumberInput input:focus {
+        border-color: #FF69B4 !important;
+        box-shadow: 0 0 10px rgba(255, 105, 180, 0.2);
     }
 
-    /* 按钮 */
+    /* 按钮：流光溢彩 */
     div.stButton > button {
         background: linear-gradient(90deg, #FF9A9E 0%, #FECFEF 50%, #FF9A9E 100%);
         background-size: 200% auto;
@@ -135,7 +134,7 @@ def load_elysia_style():
 load_elysia_style()
 
 # ==========================================
-# 👇 2. 工具函数库 👇
+# 👇 2. 工具函数库 (Utils) 👇
 # ==========================================
 @st.cache_resource
 def get_font(size):
@@ -149,11 +148,12 @@ def load_preview_image(uploaded_file):
     image.thumbnail((400, 400)) 
     return image
 
-# 核心 AI 逻辑
+# 核心 AI 逻辑 (迭代 v7.0: 加入思维链 CoT)
 def generate_sora_prompt_with_ai(api_key, base_url, model_name, global_style, cam, phys, ratio, motion, neg_prompt, shots_data):
     if not base_url: base_url = "https://api.openai.com/v1"
     client = OpenAI(api_key=api_key, base_url=base_url)
     
+    # 构造更强的技术参数头
     tech_specs = f"Specs: Ratio {ratio}, Motion {motion}/10, {cam}, {phys}"
     
     system_prompt = f"""
@@ -162,11 +162,16 @@ def generate_sora_prompt_with_ai(api_key, base_url, model_name, global_style, ca
     【任务目标】
     将用户的静态分镜表，转化为一段包含 "物理逻辑" 和 "叙事流动" 的 Sora 2 (Turbo) 视频提示词。
     
+    【思维链 (Chain of Thought)】
+    1. 先分析用户提供的图片内容和动作。
+    2. 思考这些动作在物理世界中会产生什么光影变化 (例如：转身会导致头发飘动，水面会有波纹)。
+    3. 思考镜头应该如何运动才能配合这个动作 (例如：人物跑动时使用 Tracking Shot)。
+    
     【输出要求】
     1. 必须以技术参数开头: "{tech_specs}"
     2. 必须使用时间轴标记: [0s-2s], [2s-4s]...
     3. 必须融入负面提示词逻辑: "Ensure high quality, avoid {neg_prompt}."
-    4. 仅输出 Prompt，不要包含解释。
+    4. 不要输出你的思考过程，只输出最终的 Prompt。
     """
     
     user_content = f"Global Style: {global_style}\nStoryboard Sequences:\n"
@@ -187,7 +192,7 @@ def generate_sora_prompt_with_ai(api_key, base_url, model_name, global_style, ca
         return f"❌ 魔法中断: {str(e)}"
 
 # ==========================================
-# 👇 3. 配置数据 👇
+# 👇 3. 配置数据与状态管理 👇
 # ==========================================
 PRESETS_STYLE = {
     "🌸 爱莉希雅 (Anime)": "Dreamy Anime, Makoto Shinkai style, vibrant pastel colors, crystal clear lighting.",
@@ -207,6 +212,7 @@ TAGS_PHYSICS = ["Volumetric Lighting", "Ray-traced Reflections", "Subsurface Sca
 RATIOS = {"16:9 (电影)": (1920, 1080), "9:16 (抖音)": (1080, 1920), "2.35:1 (宽屏)": (1920, 816), "1:1 (方图)": (1080, 1080)}
 DEFAULT_NEG = "morphing, distortion, bad anatomy, blurry, watermark, text, low quality, glitch"
 
+# 初始化 Session State (迭代 v5.0: 历史记录)
 if 'history' not in st.session_state: st.session_state.history = []
 if 'last_result' not in st.session_state: st.session_state.last_result = None
 
@@ -216,16 +222,15 @@ if 'last_result' not in st.session_state: st.session_state.last_result = None
 with st.sidebar:
     if os.path.exists("elysia_cover.jpg"):
         st.image("elysia_cover.jpg", use_container_width=True)
-        st.caption("✨ “Hi~ 只有最专业的分镜，才能还原最美的梦哦！”")
+        st.caption("✨ “Hi~ 无论迭代多少次，我都与你同在！”")
 
     st.markdown("### 🏹 魔法配置")
     
     with st.expander("🤖 第一步：连接 AI 大脑", expanded=True):
         api_provider = st.selectbox("API类型", ["自定义", "火山引擎 (豆包)", "DeepSeek", "OpenAI"])
         
-        # 初始化变量 (Bug 修复)
-        base = ""
-        model = ""
+        # 默认值防止报错
+        base, model = "", ""
         
         if api_provider == "火山引擎 (豆包)":
             st.markdown("👉 [**点我注册豆包**](https://www.volcengine.com/product/doubao)")
@@ -250,8 +255,10 @@ with st.sidebar:
     st.markdown("#### 🧪 Sora 2 炼金台")
     
     col_ui1, col_ui2 = st.columns(2)
-    with col_ui1: selected_style = st.selectbox("🔮 风格", list(PRESETS_STYLE.keys()))
-    with col_ui2: selected_cam = st.selectbox("📷 运镜", list(PRESETS_CAMERA.keys()))
+    with col_ui1:
+        selected_style = st.selectbox("🔮 风格", list(PRESETS_STYLE.keys()))
+    with col_ui2:
+        selected_cam = st.selectbox("📷 运镜", list(PRESETS_CAMERA.keys()))
     
     style_content = PRESETS_STYLE[selected_style]
     cam_content = PRESETS_CAMERA[selected_cam]
@@ -266,9 +273,9 @@ with st.sidebar:
     neg_prompt = st.text_area("⛔ 负面提示词", value=DEFAULT_NEG, height=70)
 
     st.markdown("---")
-    # 间距调整（重要：间距影响分割感）
-    border_width = st.slider("🖼️ 分镜间距 (黑边)", 0, 50, 15, help="Sora 推荐使用黑色间距来区分镜头")
-    output_quality = st.select_slider("画质", ["2K", "4K"], value="2K")
+    c1, c2 = st.columns(2)
+    with c1: border_width = st.slider("间距", 0, 30, 15)
+    with c2: output_quality = st.select_slider("画质", ["2K", "4K"], value="2K")
     scale_factor = 1.5 if output_quality == "4K" else 1.0
 
     st.markdown("---")
@@ -279,7 +286,7 @@ with st.sidebar:
             st.info("（等待投喂中...）")
 
 # ==========================================
-# 👇 5. 主工作台 👇
+# 👇 5. 主工作台 (Main Stage) 👇
 # ==========================================
 
 st.title("Miss Pink Elf's Studio v10.0")
@@ -287,6 +294,7 @@ st.markdown("**“要把这一瞬间，变成永恒的故事吗？交给我吧~�
 
 uploaded_files = st.file_uploader("📂 拖入图片开始创作 (支持批量)", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True)
 
+# 👉 英雄区：无文件时显示引导
 if not uploaded_files:
     st.markdown("<br>", unsafe_allow_html=True) 
     col_intro1, col_intro2, col_intro3 = st.columns(3)
@@ -295,16 +303,16 @@ if not uploaded_files:
         st.markdown("""
         <div class="feature-card">
             <span class="emoji-icon">🧠</span>
-            <h3>硬核内核</h3>
-            <p>生成的参考图严格遵循<br>工业级分镜标准 (黑底白字)</p>
+            <h3>Sora 2 核心</h3>
+            <p>基于官方文档优化的<br>物理引擎提示词逻辑</p>
         </div>
         """, unsafe_allow_html=True)
     with col_intro2:
         st.markdown("""
         <div class="feature-card">
             <span class="emoji-icon">🎬</span>
-            <h3>AI 导演</h3>
-            <p>自动编写包含时间轴的<br>Sora 2 专用剧本</p>
+            <h3>AI 导演 v10</h3>
+            <p>思维链 (CoT) 加持<br>更懂镜头语言与叙事</p>
         </div>
         """, unsafe_allow_html=True)
     with col_intro3:
@@ -312,11 +320,15 @@ if not uploaded_files:
         <div class="feature-card">
             <span class="emoji-icon">🌸</span>
             <h3>唯美体验</h3>
-            <p>网页 UI 保持粉色浪漫<br>导出文件保持专业严谨</p>
+            <p>极致丝滑的预览技术<br>樱花雨下的创作</p>
         </div>
         """, unsafe_allow_html=True)
 
+    st.markdown("---")
+    st.info("💡 **V10.0 更新日志:** 修复了云端白屏问题，移除了本地启动代码，优化了API连接逻辑。")
+
 else:
+    # 排序文件
     uploaded_files.sort(key=lambda x: x.name)
     
     with st.container():
@@ -324,8 +336,7 @@ else:
             st.write("#### 📝 故事编织台")
             shots_data = []
             cols = st.columns(3)
-            # 这里的格式会用于图片生成
-            shot_options = ["CU (特写)", "MS (中景)", "LS (全景)", "ECU (极特写)", "OTS (过肩)", "FPV (第一人称)"]
+            shot_options = ["ECU (极特写)", "CU (特写)", "MS (中景)", "LS (全景)", "OTS (过肩)", "FPV (第一人称)"]
             
             for i, f in enumerate(uploaded_files):
                 if i >= 9: break
@@ -342,62 +353,47 @@ else:
             st.markdown("---")
             submit_btn = st.form_submit_button("✨ 施展魔法 (生成专业分镜 + 咒语) ✨", type="primary", use_container_width=True)
 
-    # 👉 核心生成逻辑 (这里进行了严格的格式修正)
+    # 👉 生成逻辑
     if submit_btn:
-        with st.status("💎 正在构建专业分镜图...", expanded=True) as status:
-            st.write("🖼️ 正在进行黑底白字排版 (Reference Strict Mode)...")
-            
-            # 基础尺寸计算
+        with st.status("💎 魔法咏唱中...", expanded=True) as status:
+            st.write("🖼️ 正在构建黑底白字专业分镜...")
+            # 图片处理
             base_w, base_h = target_size
             final_w, final_h = int(base_w * scale_factor), int(base_h * scale_factor)
             count = len(shots_data)
             cols_count = 3
             rows_count = -(-count // cols_count)
             
-            # 【关键修改】黑条高度 (Bar Height)
-            # 为了还原参考图，黑条高度设置为图片高度的约 10-15%
+            # 【专业模式】黑条高度
             bar_height = int(final_h * 0.12)
-            
             cell_h = final_h + bar_height
             
-            # 【关键修改】画布背景色 (Canvas Color)
-            # 必须是纯黑，用于分割镜头
             total_w = (final_w * cols_count) + (border_width * (cols_count + 1))
             total_h = (cell_h * rows_count) + (border_width * (rows_count + 1))
             
-            canvas = Image.new('RGB', (total_w, total_h), "#000000") # 纯黑背景
+            # 【专业模式】纯黑背景
+            canvas = Image.new('RGB', (total_w, total_h), "#000000")
             draw = ImageDraw.Draw(canvas)
-            
-            # 字体大小
-            font_size = int(bar_height * 0.5) 
-            font = get_font(font_size)
+            font = get_font(int(bar_height * 0.5))
             
             for idx, item in enumerate(shots_data):
                 src = Image.open(item["file"])
                 src = ImageOps.fit(src, (final_w, final_h), method=Image.Resampling.LANCZOS)
                 
-                # 【关键修改】单格样式 (Cell Style)
-                # 必须是：上方黑条，下方图片
-                cell = Image.new('RGB', (final_w, cell_h), "#000000") # 纯黑底
-                
-                # 贴图：图片在下方
+                # 【专业模式】单格：黑底 + 左对齐白字
+                cell = Image.new('RGB', (final_w, cell_h), "#000000")
                 cell.paste(src, (0, bar_height))
                 
-                # 写字：白色文字，左对齐，位于黑条中间
-                # 格式：KF1 [CU | 2s]
                 info_text = f"KF{idx+1} [{item['shot_code']} | {item['dur']}s]"
                 cdraw = ImageDraw.Draw(cell)
                 
-                # 文字位置：左边距 20px (或根据比例缩放), 垂直居中
                 text_padding_left = int(20 * scale_factor)
                 text_bbox = cdraw.textbbox((0, 0), info_text, font=font)
                 text_h = text_bbox[3] - text_bbox[1]
                 text_y = (bar_height - text_h) / 2
                 
-                # 绘制白色文字
                 cdraw.text((text_padding_left, text_y), info_text, fill="#FFFFFF", font=font)
                 
-                # 贴到大画布
                 r, c = idx // cols_count, idx % cols_count
                 x = border_width + (c * (final_w + border_width))
                 y = border_width + (r * (cell_h + border_width))
@@ -405,25 +401,28 @@ else:
             
             prompt_res = ""
             if api_key:
-                st.write("🧠 AI 正在生成时间轴 Prompt...")
+                st.write("🧠 AI 正在思考光影与运镜 (CoT)...")
                 prompt_res = generate_sora_prompt_with_ai(
                     api_key, base_url, model_name, 
                     style_content, cam_content, phys_content, 
                     selected_ratio_name, motion_strength, neg_prompt, shots_data
                 )
+            else:
+                st.warning("⚠️ 未连接 API，跳过提示词生成")
+
+            status.update(label="✨ 魔法完成！", state="complete", expanded=False)
             
-            status.update(label="✨ 生成完毕！", state="complete", expanded=False)
-            
+            # 保存结果到 Session
             st.session_state.last_result = {"image": canvas, "prompt": prompt_res}
-            st.session_state.history.append({"image": canvas, "prompt": prompt_res})
+            st.session_state.history.append({"image": canvas, "prompt": prompt_res, "time": time.strftime("%H:%M")})
             gc.collect()
 
-    # 结果显示
+    # 👉 结果显示区 (从 Session 读取)
     if st.session_state.last_result:
         res = st.session_state.last_result
         st.balloons()
         
-        tab1, tab2, tab3 = st.tabs(["🖼️ 专业分镜图 (Reference)", "📜 Sora 2 咒语", "🕰️ 历史记录"])
+        tab1, tab2, tab3 = st.tabs(["🖼️ 专业分镜图", "📜 Sora 2 咒语", "🕰️ 历史记录"])
         
         with tab1:
             st.caption("✅ 已严格遵循参考图格式：黑底、白字、左对齐。Sora 2 可完美识别。")
@@ -440,6 +439,8 @@ else:
                 st.info("本次仅生成了图片，填写 API Key 可生成提示词。")
         
         with tab3:
-            for i, h in enumerate(reversed(st.session_state.history[:-1])):
-                with st.expander(f"🕒 历史记录 {i+1}"):
+            st.caption("本次会话的历史生成记录 (刷新后消失)")
+            for i, h in enumerate(reversed(st.session_state.history[:-1])): 
+                with st.expander(f"🕒 记录 {h.get('time', i)}"):
                     st.image(h['image'], use_container_width=True)
+                    if h['prompt']: st.code(h['prompt'])
