@@ -11,8 +11,8 @@ import math
 # 👇 0. 核心配置 👇
 # ==========================================
 st.set_page_config(
-    page_title="Miss Pink Elf's Studio v33.2 (Optimized)", 
-    layout="wide", 
+    page_title="Miss Pink Elf's Studio v33.3 (Final)",
+    layout="wide",
     page_icon="🌸",
     initial_sidebar_state="expanded"
 )
@@ -27,7 +27,7 @@ def load_elysia_style():
     /* 全局 */
     .stApp { background: linear-gradient(135deg, #FFF0F5 0%, #E6E6FA 100%); font-family: 'Comic Sans MS', sans-serif; }
     h1, h2, h3, h4 { background: -webkit-linear-gradient(45deg, #FF6B6B, #FFA07A); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800 !important; }
-    
+
     /* 侧边栏 */
     section[data-testid="stSidebar"] { background-color: rgba(255, 255, 255, 0.75); backdrop-filter: blur(20px); }
 
@@ -42,13 +42,13 @@ def load_elysia_style():
         margin-bottom: 20px; /* 卡片间距 */
     }
     .card:hover { border-color: #FFB6C1; }
-    
+
     /* 输入控件 */
     .stTextInput input, .stNumberInput input, .stSelectbox div[data-baseweb="select"] {
         border-radius: 12px !important; border: 2px solid #FFE4E1 !important;
         background: rgba(255, 255, 255, 0.85) !important;
     }
-    
+
     /* 提交按钮 */
     div.stButton > button {
         background: linear-gradient(90deg, #FF6B6B 0%, #FFA07A 100%);
@@ -92,7 +92,7 @@ def generate_sora_prompt_with_ai(api_key, base_url, model_name, global_style, ca
     """调用AI模型生成Sora提示词"""
     if not api_key: return "错误: 未提供 API Key。"
     if not base_url: base_url = "https://api.openai.com/v1"
-    
+
     try:
         client = OpenAI(api_key=api_key, base_url=base_url)
     except Exception as e:
@@ -113,14 +113,14 @@ def generate_sora_prompt_with_ai(api_key, base_url, model_name, global_style, ca
         end_time = current_time + item['dur']
         user_content += f"- Shot {idx+1} ({current_time:.1f}s-{end_time:.1f}s): View={item['shot_code']}, Action={item['desc']}\n"
         current_time = end_time
-    
+
     try:
         response = client.chat.completions.create(
-            model=model_name, 
+            model=model_name,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content}
-            ], 
+            ],
             temperature=0.75
         )
         return response.choices[0].message.content
@@ -129,7 +129,7 @@ def generate_sora_prompt_with_ai(api_key, base_url, model_name, global_style, ca
         return f"错误: 调用AI模型失败。请检查API Key、Base URL和网络连接。 {str(e)}"
 
 # ==========================================
-# 👇 2.1. 【新增】分镜图生成函数 👇
+# 👇 2.1. 分镜图生成函数 👇
 # ==========================================
 def create_storyboard(files_data, shots_info, border, ratio_wh):
     """根据上传的图片和信息，生成一张完整的分镜图"""
@@ -140,42 +140,42 @@ def create_storyboard(files_data, shots_info, border, ratio_wh):
     num_images = len(files_data)
     cols = 3
     rows = math.ceil(num_images / cols)
-    
+
     # 定义每个单元格的尺寸 (基于16:9)
     base_w, base_h = (480, 270)
-    
+
     canvas_w = cols * base_w + (cols + 1) * border
     canvas_h = rows * base_h + (rows + 1) * border
-    
+
     canvas = Image.new('RGB', (canvas_w, canvas_h), (255, 250, 250))
     draw = ImageDraw.Draw(canvas)
-    
+
     title_font = get_font(24)
     text_font = get_font(16)
-    
+
     for i, file_data in enumerate(files_data):
         row = i // cols
         col = i % cols
-        
+
         # 计算每个单元格的起始坐标
         x_start = col * base_w + (col + 1) * border
         y_start = row * base_h + (row + 1) * border
-        
+
         # 加载并处理图片
         img = Image.open(io.BytesIO(file_data['bytes']))
         # 使用 ImageOps.fit 来裁剪和缩放图片以填充单元格，保持画面内容
         img_thumb = ImageOps.fit(img, (base_w, base_h), Image.Resampling.LANCZOS)
         canvas.paste(img_thumb, (x_start, y_start))
-        
+
         # 添加半透明黑色背景以增强文本可读性
         shot_data = shots_info[file_data['name']]
         info_text = f"镜头 {i+1} ({shot_data['duration']}s) - {shot_data['shot_type']}\n{shot_data['desc']}"
-        
+
         # 绘制文本
         text_pos_x = x_start + 10
         text_pos_y = y_start + 10
         draw.text((text_pos_x, text_pos_y), info_text, font=text_font, fill=(255,255,255), stroke_width=2, stroke_fill=(0,0,0))
-        
+
     return canvas
 
 # ==========================================
@@ -237,7 +237,7 @@ def render_hero_section():
 
 def main():
     render_sidebar()
-    st.title("Miss Pink Elf's Studio v33.2")
+    st.title("Miss Pink Elf's Studio v33.3")
 
     newly_uploaded_files = st.file_uploader(f"📂 **拖入图片 (最多 {MAX_FILES} 张)**", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True, key="uploader")
     if newly_uploaded_files:
@@ -259,13 +259,12 @@ def main():
         st.write("---")
 
         cols = st.columns(3)
-        
-        # 【优化】将回调函数放在主逻辑中，并添加 st.rerun()
+
         def move_item(index, direction):
             if direction == "up" and index > 0: st.session_state.files.insert(index - 1, st.session_state.files.pop(index))
             elif direction == "down" and index < len(st.session_state.files) - 1: st.session_state.files.insert(index + 1, st.session_state.files.pop(index))
             st.rerun()
-        
+
         def delete_item(index):
             file_name = st.session_state.files[index]['name']
             del st.session_state.shots_data[file_name]
@@ -277,16 +276,16 @@ def main():
                 with st.container():
                     st.markdown('<div class="card">', unsafe_allow_html=True)
                     st.image(load_preview_image(file_data["name"], file_data["bytes"]), use_container_width=True)
-                    
+
                     file_name = file_data['name']
                     shot_info = st.session_state.shots_data.get(file_name, {})
-                    
+
                     st.caption(f"镜头 {i+1}: {file_name[:20]}")
-                    
+
                     s_type = st.selectbox("视角", SHOT_OPTIONS, index=SHOT_OPTIONS.index(shot_info.get('shot_type', "MS (中景)")), key=f"s_{i}")
                     dur = st.number_input("秒", value=shot_info.get('duration', 2.0), min_value=0.5, step=0.5, key=f"d_{i}")
                     desc = st.text_input("描述", value=shot_info.get('desc', ''), placeholder="这个镜头里发生了什么...", key=f"t_{i}")
-                    
+
                     st.session_state.shots_data[file_name] = {"shot_type": s_type, "duration": dur, "desc": desc}
 
                     c1, c2, c3 = st.columns([1,1,1])
@@ -295,16 +294,16 @@ def main():
                     with c3: st.button("❌", key=f"del_{i}", on_click=delete_item, args=(i,), use_container_width=True, type="primary")
 
                     st.markdown('</div>', unsafe_allow_html=True)
-        
+
         st.write("---")
         if st.button("✨ 施展魔法 (生成分镜 + 咒语) ✨", type="primary", use_container_width=True):
             final_shots_data = []
             for file_data in st.session_state.files:
                 shot_info = st.session_state.shots_data[file_data['name']]
-                # 检查描述是否为空
-                if not shot_info['desc'].strip():
-                    st.error(f"错误：镜头 {file_data['name']} 的描述不能为空！")
-                    return # 终止执行
+                # 【修改】注释掉描述检查，允许为空
+                # if not shot_info['desc'].strip():
+                #     st.error(f"错误：镜头 {file_data['name']} 的描述不能为空！")
+                #     return # 终止执行
 
                 final_shots_data.append({
                     "bytes": file_data["bytes"],
@@ -315,15 +314,12 @@ def main():
 
             with st.status("💎 魔法咏唱中...", expanded=True) as status:
                 status.write("🖼️ 正在构建专业分镜...")
-                
-                # 【修复】调用分镜图生成函数
+
                 canvas = create_storyboard(st.session_state.files, st.session_state.shots_data, st.session_state.border_width, RATIOS[st.session_state.selected_ratio_name])
-                
+
                 prompt_res = ""
-                # 检查API Key是否存在
                 if 'api_key' in st.session_state and st.session_state.api_key:
                     status.write("🧠 AI 正在撰写剧本...")
-                    # 【修复】正确调用AI函数并传递所有参数
                     prompt_res = generate_sora_prompt_with_ai(
                         api_key=st.session_state.api_key,
                         base_url=st.session_state.base_url,
@@ -338,10 +334,9 @@ def main():
                     )
                 else:
                     prompt_res = "提示: 未配置 API Key，跳过AI生成。请在左侧配置后重试。"
-                
+
                 status.update(label="✨ 魔法完成！", state="complete")
-                
-                # 【修复】保存真实的分镜图和AI生成的提示词
+
                 buf = io.BytesIO()
                 if canvas:
                     canvas.save(buf, format="JPEG")
@@ -350,20 +345,20 @@ def main():
                     image_bytes = None
 
                 st.session_state.last_result = {"image_bytes": image_bytes, "prompt": prompt_res}
-                st.rerun() # 立即刷新以显示结果
+                st.rerun()
 
-        # 【优化】结果展示区
         if st.session_state.last_result:
-            st.balloons()
+            # 【修改】注释掉气球动画
+            # st.balloons()
             st.markdown("---")
             st.markdown("### 📜 魔法卷轴已展开")
-            
+
             prompt_result = st.session_state.last_result["prompt"]
             if prompt_result.startswith("错误:"):
                 st.error(prompt_result)
             else:
                 st.text_area("✨ AI 生成的Sora提示词", value=prompt_result, height=250)
-            
+
             if st.session_state.last_result["image_bytes"]:
                 st.markdown("---")
                 st.markdown("### 🖼️ 生成的分镜总览")
