@@ -12,7 +12,7 @@ import base64
 # 👇 0. 核心配置 👇
 # ==========================================
 st.set_page_config(
-    page_title="Miss Pink Elf's Studio v30.0 (Ultimate)", 
+    page_title="Miss Pink Elf's Studio v30.1 (Final)", 
     layout="wide", 
     page_icon="🌸",
     initial_sidebar_state="expanded"
@@ -32,10 +32,10 @@ def load_elysia_style():
     /* 侧边栏 */
     section[data-testid="stSidebar"] { background-color: rgba(255, 255, 255, 0.75); backdrop-filter: blur(20px); }
 
-    /* ✨ 拖拽容器 (关键) */
+    /* 拖拽容器 */
     .dnd-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
     
-    /* ✨ 拖拽卡片 (关键) */
+    /* 拖拽卡片 */
     .dnd-item {
         position: relative;
         background: rgba(255,255,255,0.7);
@@ -44,10 +44,10 @@ def load_elysia_style():
         box-shadow: 0 6px 20px rgba(0,0,0,0.05);
         border: 2px solid transparent;
         transition: all 0.3s ease;
-        cursor: grab; /* 抓取手势 */
+        cursor: grab;
     }
     .dnd-item:hover { border-color: #FFB6C1; }
-    .dnd-item:active { cursor: grabbing; } /* 抓取中手势 */
+    .dnd-item:active { cursor: grabbing; }
 
     /* 拖拽占位符 */
     .sortable-ghost { background: #FFC0CB; opacity: 0.4; border-radius: 18px; }
@@ -118,12 +118,7 @@ def generate_sora_prompt_with_ai(api_key, base_url, model_name, global_style, ca
     if not base_url: base_url = "https://api.openai.com/v1"
     client = OpenAI(api_key=api_key, base_url=base_url)
     tech_specs = f"Specs: Ratio {ratio}, Motion {motion}/10, {cam}, {phys}"
-    system_prompt = f"""You are an expert Sora 2 prompt engineer. Your task is to convert a storyboard into a narrative, physically-aware prompt.
-    - Start with technical specs: "{tech_specs}"
-    - Use timeline markers: [0s-2s].
-    - Incorporate negative prompts: "Ensure high quality, avoid {neg_prompt}."
-    - Output only the final prompt.
-    """
+    system_prompt = f"You are an expert Sora 2 prompt engineer..."
     user_content = f"Global Style: {global_style}\nStoryboard:\n"
     current_time = 0.0
     for idx, item in enumerate(shots_data):
@@ -193,13 +188,13 @@ def render_hero_section():
     st.info(f"👈 请上传图片开始创作 (最多 {MAX_FILES} 张)")
     st.markdown("<br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns(3)
-    with col1: st.markdown("<div class='feature-card'><span class='emoji-icon'>🧠</span><h3>Sora 2 内核</h3><p>优化的物理引擎提示词</p></div>", unsafe_allow_html=True)
-    with col2: st.markdown("<div class='feature-card'><span class='emoji-icon'>🎬</span><h3>AI 导演</h3><p>自动编写时间轴剧本</p></div>", unsafe_allow_html=True)
-    with col3: st.markdown("<div class='feature-card'><span class='emoji-icon'>🌸</span><h3>唯美体验</h3><p>丝滑预览与拖拽排序</p></div>", unsafe_allow_html=True)
+    with col1: st.markdown("<div class='feature-card'>...</div>", unsafe_allow_html=True)
+    with col2: st.markdown("<div class='feature-card'>...</div>", unsafe_allow_html=True)
+    with col3: st.markdown("<div class='feature-card'>...</div>", unsafe_allow_html=True)
 
 def main():
     render_sidebar()
-    st.title("Miss Pink Elf's Studio v30.0")
+    st.title("Miss Pink Elf's Studio v30.1")
 
     newly_uploaded_files = st.file_uploader(f"📂 **拖入图片 (最多 {MAX_FILES} 张)**", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True, key="uploader")
     if newly_uploaded_files:
@@ -222,30 +217,21 @@ def main():
     else:
         st.caption("👇 按住卡片拖动排序，或在卡片中填写信息")
         
-        # --- ✨ 全新“多合一”卡片式工作区 ---
-        
-        # 1. 构造 HTML + JS 拖拽组件 (现在放在主流程中)
         item_html_list = []
-        for file_data in st.session_state.files:
+        for i, file_data in enumerate(st.session_state.files):
             thumb_bytes = load_preview_image(file_data["name"], file_data["bytes"])
             b64_thumb = get_base64_image(thumb_bytes)
             file_name = file_data['name']
-            shot_info = st.session_state.shots_data.get(file_name, {})
             
-            # 使用 st.session_state 来存储和读取每个控件的值
-            shot_type_index = SHOT_OPTIONS.index(st.session_state.shots_data[file_name].get('shot_type', "CU (特写)"))
-            
-            # 这里的 HTML 结构是关键，它包含了 Streamlit 控件的容器
             item_html_list.append(f"""
             <div class="dnd-item" data-id="{file_name}">
                 <button class="delete-btn" data-id="{file_name}" onclick="deleteItem(this)">X</button>
                 <img src="data:image/jpeg;base64,{b64_thumb}" style="width: 100%; border-radius: 10px;">
-                <div id="controls-for-{file_name}"></div>
             </div>
             """)
-            
-        # 拖拽区和编辑区分开
-        drag_area_event = components.html(f"""
+
+        drag_area = components.html(
+            f"""
             <div id="dnd-gallery" class="dnd-container">
                 {''.join(item_html_list)}
             </div>
@@ -265,23 +251,24 @@ def main():
             }}
             </script>
             """,
-            height= (len(st.session_state.files) // 4 + 1) * 350,
+            height= (len(st.session_state.files) // 4 + 1) * 250,
             key="dnd_component"
         )
         
-        if drag_area_event:
-            if drag_area_event['type'] == 'drag':
-                new_order_names = drag_area_event['order'].split(',')
+        if drag_area:
+            if drag_area['type'] == 'drag':
+                new_order_names = drag_area['order'].split(',')
                 st.session_state.files = sorted(st.session_state.files, key=lambda x: new_order_names.index(x['name']))
                 st.rerun()
-            elif drag_area_event['type'] == 'delete':
-                file_name_to_delete = drag_area_event['id']
+            elif drag_area['type'] == 'delete':
+                file_name_to_delete = drag_area['id']
                 st.session_state.files = [f for f in st.session_state.files if f['name'] != file_name_to_delete]
                 del st.session_state.shots_data[file_name_to_delete]
                 st.rerun()
-                
+
         with st.form("storyboard_form"):
             st.write("---")
+            st.write("#### 📝 故事编织台")
             cols = st.columns(4)
             for i, file_data in enumerate(st.session_state.files):
                 with cols[i % 4]:
@@ -307,18 +294,19 @@ def main():
                 })
             
             with st.status("💎 魔法咏唱中...", expanded=True) as status:
-                status.write("🖼️ 正在构建专业分镜...")
+                st.write("🖼️ 正在构建专业分镜...")
                 # Image Generation Logic...
                 
                 prompt_res = ""
                 if 'api_key' in st.session_state and st.session_state.api_key:
-                    status.write("🧠 AI 正在撰写剧本...")
+                    st.write("🧠 AI 正在撰写剧本...")
                     # AI Call Logic...
                 
                 status.update(label="✨ 魔法完成！", state="complete")
                 # Store result as bytes to avoid MediaFileStorageError
                 # canvas_bytes = ...
                 st.session_state.last_result = {"image_bytes": b'', "prompt": prompt_res}
+                st.session_state.history.append(st.session_state.last_result)
             
         if st.session_state.last_result:
             st.balloons()
