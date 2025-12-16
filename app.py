@@ -1,15 +1,29 @@
+import sys
+import os
+import subprocess
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import io
-import os
 import gc
-import time
 import random
 from openai import OpenAI
 
 # ==========================================
-# 👇 0. 核心配置 (直接启动，无需 subprocess) 👇
+# 👇 0. 启动引导 & 环境配置 👇
 # ==========================================
+# 这段代码在云端服务器上会自动跳过，不会引起冲突
+if __name__ == '__main__':
+    if "STREAMLIT_subprocess_FLAG" not in os.environ:
+        script_path = os.path.abspath(__file__)
+        cmd = [sys.executable, "-m", "streamlit", "run", script_path]
+        new_env = os.environ.copy()
+        new_env["STREAMLIT_subprocess_FLAG"] = "true"
+        try:
+            subprocess.run(cmd, env=new_env)
+        except KeyboardInterrupt:
+            pass
+        sys.exit(0)
+
 st.set_page_config(
     page_title="Miss Pink Elf's Studio v10.0", 
     layout="wide", 
@@ -138,8 +152,28 @@ load_elysia_style()
 # ==========================================
 @st.cache_resource
 def get_font(size):
-    try: return ImageFont.truetype("arialbd.ttf", size)
-    except: return ImageFont.load_default()
+    # 创建一个字体备选列表，按推荐顺序排列
+    # DejaVuSans-Bold 在 Linux 服务器上非常常见，且效果很好
+    possible_fonts = [
+        "DejaVuSans-Bold.ttf",  # Linux 服务器首选
+        "arialbd.ttf",          # Windows 上的备选
+        "Arial Bold.ttf",       # 另一种 Windows 命名
+        "Arial.ttf",            # 如果粗体没有，用常规体也行
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" # 在某些 Linux 上的绝对路径
+    ]
+    
+    # 挨个尝试列表里的字体
+    for font_name in possible_fonts:
+        try:
+            # 只要找到一个能用的，就立刻返回
+            return ImageFont.truetype(font_name, size)
+        except IOError:
+            # 如果找不到，就默默地继续尝试下一个
+            continue
+            
+    # 如果列表里所有字体都失败了，才使用最后的备用方案
+    # 这可以确保程序永远不会因为字体问题而崩溃
+    return ImageFont.load_default()
 
 @st.cache_data(show_spinner=False)
 def load_preview_image(uploaded_file):
@@ -148,12 +182,11 @@ def load_preview_image(uploaded_file):
     image.thumbnail((400, 400)) 
     return image
 
-# 核心 AI 逻辑 (迭代 v7.0: 加入思维链 CoT)
+# 核心 AI 逻辑
 def generate_sora_prompt_with_ai(api_key, base_url, model_name, global_style, cam, phys, ratio, motion, neg_prompt, shots_data):
     if not base_url: base_url = "https://api.openai.com/v1"
     client = OpenAI(api_key=api_key, base_url=base_url)
     
-    # 构造更强的技术参数头
     tech_specs = f"Specs: Ratio {ratio}, Motion {motion}/10, {cam}, {phys}"
     
     system_prompt = f"""
@@ -161,11 +194,6 @@ def generate_sora_prompt_with_ai(api_key, base_url, model_name, global_style, ca
     
     【任务目标】
     将用户的静态分镜表，转化为一段包含 "物理逻辑" 和 "叙事流动" 的 Sora 2 (Turbo) 视频提示词。
-    
-    【思维链 (Chain of Thought)】
-    1. 先分析用户提供的图片内容和动作。
-    2. 思考这些动作在物理世界中会产生什么光影变化 (例如：转身会导致头发飘动，水面会有波纹)。
-    3. 思考镜头应该如何运动才能配合这个动作 (例如：人物跑动时使用 Tracking Shot)。
     
     【输出要求】
     1. 必须以技术参数开头: "{tech_specs}"
@@ -212,7 +240,6 @@ TAGS_PHYSICS = ["Volumetric Lighting", "Ray-traced Reflections", "Subsurface Sca
 RATIOS = {"16:9 (电影)": (1920, 1080), "9:16 (抖音)": (1080, 1920), "2.35:1 (宽屏)": (1920, 816), "1:1 (方图)": (1080, 1080)}
 DEFAULT_NEG = "morphing, distortion, bad anatomy, blurry, watermark, text, low quality, glitch"
 
-# 初始化 Session State (迭代 v5.0: 历史记录)
 if 'history' not in st.session_state: st.session_state.history = []
 if 'last_result' not in st.session_state: st.session_state.last_result = None
 
@@ -303,7 +330,7 @@ if not uploaded_files:
         st.markdown("""
         <div class="feature-card">
             <span class="emoji-icon">🧠</span>
-            <h3>Sora 2 核心</h3>
+            <h3>Sora 2 内核</h3>
             <p>基于官方文档优化的<br>物理引擎提示词逻辑</p>
         </div>
         """, unsafe_allow_html=True)
@@ -325,7 +352,7 @@ if not uploaded_files:
         """, unsafe_allow_html=True)
 
     st.markdown("---")
-    st.info("💡 **V10.0 更新日志:** 修复了云端白屏问题，移除了本地启动代码，优化了API连接逻辑。")
+    st.info("💡 **V10.0 更新日志:** 修复了云端字体 Bug，移除了本地启动代码，优化了API连接逻辑，新增历史记录和 TXT 下载。")
 
 else:
     # 排序文件
@@ -414,6 +441,7 @@ else:
             
             # 保存结果到 Session
             st.session_state.last_result = {"image": canvas, "prompt": prompt_res}
+            # (迭代功能) 加入历史列表
             st.session_state.history.append({"image": canvas, "prompt": prompt_res, "time": time.strftime("%H:%M")})
             gc.collect()
 
