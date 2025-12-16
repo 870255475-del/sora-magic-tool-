@@ -11,7 +11,7 @@ import math
 # 👇 0. 核心配置 👇
 # ==========================================
 st.set_page_config(
-    page_title="Miss Pink Elf's Studio v33.3 (Final)",
+    page_title="Miss Pink Elf's Studio v33.4 (Layout Update)",
     layout="wide",
     page_icon="🌸",
     initial_sidebar_state="expanded"
@@ -129,54 +129,70 @@ def generate_sora_prompt_with_ai(api_key, base_url, model_name, global_style, ca
         return f"错误: 调用AI模型失败。请检查API Key、Base URL和网络连接。 {str(e)}"
 
 # ==========================================
-# 👇 2.1. 分镜图生成函数 👇
+# 👇 2.1. 【重写】分镜图生成函数 👇
 # ==========================================
-def create_storyboard(files_data, shots_info, border, ratio_wh):
-    """根据上传的图片和信息，生成一张完整的分镜图"""
+def create_storyboard(files_data, shots_info, border):
+    """根据上传的图片和信息，生成一张符合专业格式的分镜图"""
     if not files_data:
         return None
 
-    # 计算布局
+    # 1. 设置布局为2列
+    cols = 2
     num_images = len(files_data)
-    cols = 3
     rows = math.ceil(num_images / cols)
 
-    # 定义每个单元格的尺寸 (基于16:9)
-    base_w, base_h = (480, 270)
+    # 2. 定义尺寸
+    header_height = 40  # 顶部标题栏高度
+    base_w, base_h = (640, 360)  # 每个镜头图片的16:9尺寸
+    cell_h = base_h + header_height # 每个单元格的总高度
 
+    # 3. 计算画布总尺寸
     canvas_w = cols * base_w + (cols + 1) * border
-    canvas_h = rows * base_h + (rows + 1) * border
+    canvas_h = rows * cell_h + (rows + 1) * border
 
-    canvas = Image.new('RGB', (canvas_w, canvas_h), (255, 250, 250))
+    # 4. 创建画布
+    canvas = Image.new('RGB', (canvas_w, canvas_h), (255, 255, 255)) # 白色背景
     draw = ImageDraw.Draw(canvas)
+    text_font = get_font(18)
 
-    title_font = get_font(24)
-    text_font = get_font(16)
-
+    # 5. 遍历并绘制每个镜头
     for i, file_data in enumerate(files_data):
         row = i // cols
         col = i % cols
 
-        # 计算每个单元格的起始坐标
+        # 计算每个单元格的左上角坐标 (包含标题栏)
         x_start = col * base_w + (col + 1) * border
-        y_start = row * base_h + (row + 1) * border
+        y_start = row * cell_h + (row + 1) * border
 
-        # 加载并处理图片
-        img = Image.open(io.BytesIO(file_data['bytes']))
-        # 使用 ImageOps.fit 来裁剪和缩放图片以填充单元格，保持画面内容
-        img_thumb = ImageOps.fit(img, (base_w, base_h), Image.Resampling.LANCZOS)
-        canvas.paste(img_thumb, (x_start, y_start))
+        # 绘制黑色的标题栏背景
+        draw.rectangle([x_start, y_start, x_start + base_w, y_start + header_height], fill=(10, 10, 10))
 
-        # 添加半透明黑色背景以增强文本可读性
+        # 准备标题文本
         shot_data = shots_info[file_data['name']]
-        info_text = f"镜头 {i+1} ({shot_data['duration']}s) - {shot_data['shot_type']}\n{shot_data['desc']}"
+        shot_code = shot_data['shot_type'].split(" ")[0]
+        duration = shot_data['duration']
+        info_text = f"KF{i+1} [{shot_code} | {duration:g}s]" # 使用:g来自动处理整数和小数
 
-        # 绘制文本
-        text_pos_x = x_start + 10
-        text_pos_y = y_start + 10
-        draw.text((text_pos_x, text_pos_y), info_text, font=text_font, fill=(255,255,255), stroke_width=2, stroke_fill=(0,0,0))
+        # 计算文本尺寸以实现垂直居中
+        try:
+            text_bbox = draw.textbbox((0, 0), info_text, font=text_font)
+            text_height = text_bbox[3] - text_bbox[1]
+        except AttributeError:
+            # 兼容旧版Pillow
+            _, text_height = draw.textsize(info_text, font=text_font)
+
+        # 绘制白色文本 (左对齐，垂直居中)
+        text_x = x_start + 15
+        text_y = y_start + (header_height - text_height) / 2
+        draw.text((text_x, text_y), info_text, font=text_font, fill=(255, 255, 255))
+
+        # 加载、缩放并粘贴镜头图片 (位于标题栏下方)
+        img = Image.open(io.BytesIO(file_data['bytes']))
+        img_thumb = ImageOps.fit(img, (base_w, base_h), Image.Resampling.LANCZOS)
+        canvas.paste(img_thumb, (x_start, y_start + header_height))
 
     return canvas
+
 
 # ==========================================
 # 👇 3. 状态管理 & 数据 👇
@@ -223,7 +239,7 @@ def render_sidebar():
         st.session_state.motion_strength = st.slider("⚡ 动态幅度", 1, 10, 5)
         st.session_state.neg_prompt = st.text_area("⛔ 负面提示词", value=DEFAULT_NEG, height=70)
         st.markdown("---")
-        st.session_state.border_width = st.slider("🖼️ 间距", 0, 50, 20)
+        st.session_state.border_width = st.slider("🖼️ 间距", 0, 50, 10) # 默认间距调小一些
         st.markdown("---")
         with st.expander("☕ 打赏作者", expanded=False):
             if os.path.exists("pay.jpg"):
@@ -237,7 +253,7 @@ def render_hero_section():
 
 def main():
     render_sidebar()
-    st.title("Miss Pink Elf's Studio v33.3")
+    st.title("Miss Pink Elf's Studio v33.4")
 
     newly_uploaded_files = st.file_uploader(f"📂 **拖入图片 (最多 {MAX_FILES} 张)**", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True, key="uploader")
     if newly_uploaded_files:
@@ -258,7 +274,7 @@ def main():
         st.caption("👇 在每个卡片中编辑信息，使用 ⬆️⬇️ 调整顺序，或点击 ❌ 删除")
         st.write("---")
 
-        cols = st.columns(3)
+        cols = st.columns(3) # UI卡片仍然保持3列以节省屏幕空间
 
         def move_item(index, direction):
             if direction == "up" and index > 0: st.session_state.files.insert(index - 1, st.session_state.files.pop(index))
@@ -300,11 +316,6 @@ def main():
             final_shots_data = []
             for file_data in st.session_state.files:
                 shot_info = st.session_state.shots_data[file_data['name']]
-                # 【修改】注释掉描述检查，允许为空
-                # if not shot_info['desc'].strip():
-                #     st.error(f"错误：镜头 {file_data['name']} 的描述不能为空！")
-                #     return # 终止执行
-
                 final_shots_data.append({
                     "bytes": file_data["bytes"],
                     "shot_code": shot_info['shot_type'].split(" ")[0],
@@ -315,7 +326,7 @@ def main():
             with st.status("💎 魔法咏唱中...", expanded=True) as status:
                 status.write("🖼️ 正在构建专业分镜...")
 
-                canvas = create_storyboard(st.session_state.files, st.session_state.shots_data, st.session_state.border_width, RATIOS[st.session_state.selected_ratio_name])
+                canvas = create_storyboard(st.session_state.files, st.session_state.shots_data, st.session_state.border_width)
 
                 prompt_res = ""
                 if 'api_key' in st.session_state and st.session_state.api_key:
@@ -348,8 +359,6 @@ def main():
                 st.rerun()
 
         if st.session_state.last_result:
-            # 【修改】注释掉气球动画
-            # st.balloons()
             st.markdown("---")
             st.markdown("### 📜 魔法卷轴已展开")
 
