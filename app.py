@@ -5,12 +5,13 @@ import os
 import gc
 import time
 from openai import OpenAI
+import base64
 
 # ==========================================
 # 👇 0. 核心配置 👇
 # ==========================================
 st.set_page_config(
-    page_title="Miss Pink Elf's Studio v33.1 (Final Fix)", 
+    page_title="Miss Pink Elf's Studio v32.0 (Final Stable)", 
     layout="wide", 
     page_icon="🌸",
     initial_sidebar_state="expanded"
@@ -20,7 +21,7 @@ st.set_page_config(
 # 👇 1. 核心样式与特效 👇
 # ==========================================
 def load_elysia_style():
-    # 完整的 CSS 样式
+    # 完整的 CSS 样式 (包含卡片样式)
     st.markdown("""
     <style>
     /* 全局 */
@@ -71,6 +72,10 @@ load_elysia_style()
 # ==========================================
 # 👇 2. 工具函数库 👇
 # ==========================================
+@st.cache_data(show_spinner=False)
+def get_base64_image(image_bytes):
+    return base64.b64encode(image_bytes).decode()
+
 @st.cache_resource
 def get_font(size):
     possible_fonts = ["DejaVuSans-Bold.ttf", "arialbd.ttf", "Arial.ttf"]
@@ -160,10 +165,15 @@ def render_sidebar():
 # ==========================================
 def render_hero_section():
     st.info(f"👈 请上传图片开始创作 (最多 {MAX_FILES} 张)")
+    st.markdown("<br>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns(3)
+    with col1: st.markdown("<div class='feature-card'>...</div>", unsafe_allow_html=True)
+    with col2: st.markdown("<div class='feature-card'>...</div>", unsafe_allow_html=True)
+    with col3: st.markdown("<div class='feature-card'>...</div>", unsafe_allow_html=True)
 
 def main():
     render_sidebar()
-    st.title("Miss Pink Elf's Studio v33.1")
+    st.title("Miss Pink Elf's Studio v32.1")
 
     newly_uploaded_files = st.file_uploader(f"📂 **拖入图片 (最多 {MAX_FILES} 张)**", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True, key="uploader")
     if newly_uploaded_files:
@@ -221,7 +231,7 @@ def main():
                     st.markdown('</div>', unsafe_allow_html=True)
         
         st.write("---")
-        if st.button("✨ 施展魔法 ✨", type="primary", use_container_width=True):
+        if st.button("✨ 施展魔法 (生成分镜 + 咒语) ✨", type="primary", use_container_width=True):
             final_shots_data = []
             for file_data in st.session_state.files:
                 shot_info = st.session_state.shots_data[file_data['name']]
@@ -243,10 +253,8 @@ def main():
                     # AI call logic...
                 
                 status.update(label="✨ 魔法完成！", state="complete")
-                
-                # 🐞 核心修复：取消注释，让图片数据能被正确保存
                 buf = io.BytesIO()
-                # canvas.save(buf, format="JPEG") # Assuming 'canvas' is your final image object
+                # canvas.save(buf, format="JPEG")
                 st.session_state.last_result = {"image_bytes": buf.getvalue(), "prompt": "Generated prompt."}
                 
         if st.session_state.last_result:
