@@ -11,7 +11,7 @@ import math
 # 👇 0. 核心配置 👇
 # ==========================================
 st.set_page_config(
-    page_title="Miss Pink Elf's Studio v33.5 (Final Fix)",
+    page_title="Miss Pink Elf's Studio v33.6 (Aspect Ratio Fix)",
     layout="wide",
     page_icon="🌸",
     initial_sidebar_state="expanded"
@@ -136,51 +136,64 @@ def create_storyboard(files_data, shots_info, border):
     if not files_data:
         return None
 
+    # 第一步：创建比例正确的原始画布
     cols = 2
     num_images = len(files_data)
     rows = math.ceil(num_images / cols)
-
     header_height = 40
     base_w, base_h = (640, 360)
     cell_h = base_h + header_height
-
     canvas_w = cols * base_w + (cols + 1) * border
     canvas_h = rows * cell_h + (rows + 1) * border
-
     canvas = Image.new('RGB', (canvas_w, canvas_h), (255, 255, 255))
     draw = ImageDraw.Draw(canvas)
     text_font = get_font(18)
 
     for i, file_data in enumerate(files_data):
-        row = i // cols
-        col = i % cols
-
+        row, col = i // cols, i % cols
         x_start = col * base_w + (col + 1) * border
         y_start = row * cell_h + (row + 1) * border
-
         draw.rectangle([x_start, y_start, x_start + base_w, y_start + header_height], fill=(10, 10, 10))
-
         shot_data = shots_info[file_data['name']]
         shot_code = shot_data['shot_type'].split(" ")[0]
         duration = shot_data['duration']
         info_text = f"KF{i+1} [{shot_code} | {duration:g}s]"
-
         try:
             text_bbox = draw.textbbox((0, 0), info_text, font=text_font)
             text_height = text_bbox[3] - text_bbox[1]
         except AttributeError:
             _, text_height = draw.textsize(info_text, font=text_font)
-
         text_x = x_start + 15
         text_y = y_start + (header_height - text_height) / 2
         draw.text((text_x, text_y), info_text, font=text_font, fill=(255, 255, 255))
-
         img = Image.open(io.BytesIO(file_data['bytes']))
         img_thumb = ImageOps.fit(img, (base_w, base_h), Image.Resampling.LANCZOS)
         canvas.paste(img_thumb, (x_start, y_start + header_height))
 
-    # 【新增】严格调整最终输出尺寸为 1024x718
-    final_canvas = canvas.resize((1024, 718), Image.Resampling.LANCZOS)
+    # 第二步：【BUG修复】将原始画布无损地嵌入到 1024x718 的最终画布中
+    target_w, target_h = 1024, 718
+    original_w, original_h = canvas.size
+    
+    # 计算缩放比例，确保图像能完整放入目标框内
+    scale = min(target_w / original_w, target_h / original_h)
+    
+    # 计算缩放后的新尺寸
+    new_w = int(original_w * scale)
+    new_h = int(original_h * scale)
+    
+    # 使用高质量算法进行缩放
+    resized_canvas = canvas.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    
+    # 创建一个黑色的最终画布
+    final_canvas = Image.new('RGB', (target_w, target_h), (10, 10, 10))
+    
+    # 计算粘贴位置，使其居中
+    paste_x = (target_w - new_w) // 2
+    paste_y = (target_h - new_h) // 2
+    
+    # 将缩放后的图像粘贴到最终画布的中央
+    final_canvas.paste(resized_canvas, (paste_x, paste_y))
+    
     return final_canvas
 
 
@@ -243,7 +256,7 @@ def render_hero_section():
 
 def main():
     render_sidebar()
-    st.title("Miss Pink Elf's Studio v33.5 (Final Fix)")
+    st.title("Miss Pink Elf's Studio v33.6 (Aspect Ratio Fix)")
 
     newly_uploaded_files = st.file_uploader(f"📂 **拖入图片 (最多 {MAX_FILES} 张)**", type=['jpg', 'png', 'jpeg'], accept_multiple_files=True, key="uploader")
     if newly_uploaded_files:
@@ -266,9 +279,7 @@ def main():
 
         cols = st.columns(3)
 
-        # 【BUG修复】回调函数现在接收文件名而不是索引
         def move_item(file_name, direction):
-            # 通过文件名找到当前索引
             index = next(i for i, item in enumerate(st.session_state.files) if item['name'] == file_name)
             if direction == "up" and index > 0:
                 st.session_state.files.insert(index - 1, st.session_state.files.pop(index))
@@ -277,14 +288,13 @@ def main():
             st.rerun()
 
         def delete_item(file_name):
-            # 通过文件名找到当前索引
             index = next(i for i, item in enumerate(st.session_state.files) if item['name'] == file_name)
             del st.session_state.shots_data[file_name]
             st.session_state.files.pop(index)
             st.rerun()
 
         for i, file_data in enumerate(st.session_state.files):
-            file_name = file_data['name'] # 提前获取文件名
+            file_name = file_data['name']
             with cols[i % 3]:
                 with st.container():
                     st.markdown('<div class="card">', unsafe_allow_html=True)
@@ -293,7 +303,6 @@ def main():
                     shot_info = st.session_state.shots_data.get(file_name, {})
                     st.caption(f"镜头 {i+1}: {file_name[:20]}")
 
-                    # 【BUG修复】所有key都使用唯一的文件名
                     s_type = st.selectbox("视角", SHOT_OPTIONS, index=SHOT_OPTIONS.index(shot_info.get('shot_type', "MS (中景)")), key=f"s_{file_name}")
                     dur = st.number_input("秒", value=shot_info.get('duration', 2.0), min_value=0.5, step=0.5, key=f"d_{file_name}")
                     desc = st.text_input("描述", value=shot_info.get('desc', ''), placeholder="这个镜头里发生了什么...", key=f"t_{file_name}")
@@ -301,7 +310,6 @@ def main():
                     st.session_state.shots_data[file_name] = {"shot_type": s_type, "duration": dur, "desc": desc}
 
                     c1, c2, c3 = st.columns([1,1,1])
-                    # 【BUG修复】on_click回调传递文件名
                     with c1: st.button("⬆️", key=f"up_{file_name}", on_click=move_item, args=(file_name, "up"), use_container_width=True, disabled=(i==0))
                     with c2: st.button("⬇️", key=f"down_{file_name}", on_click=move_item, args=(file_name, "down"), use_container_width=True, disabled=(i==len(st.session_state.files)-1))
                     with c3: st.button("❌", key=f"del_{file_name}", on_click=delete_item, args=(file_name,), use_container_width=True, type="primary")
@@ -346,7 +354,7 @@ def main():
 
                 buf = io.BytesIO()
                 if canvas:
-                    canvas.save(buf, format="JPEG", quality=95) # 使用高质量JPEG保存
+                    canvas.save(buf, format="JPEG", quality=95)
                     image_bytes = buf.getvalue()
                 else:
                     image_bytes = None
