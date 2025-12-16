@@ -1,29 +1,15 @@
-import sys
-import os
-import subprocess
 import streamlit as st
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import io
+import os
 import gc
+import time
 import random
 from openai import OpenAI
 
 # ==========================================
-# 👇 0. 启动引导 & 环境配置 👇
+# 👇 0. 核心配置 (已移除本地启动代码，云端专用) 👇
 # ==========================================
-# 这段代码在云端服务器上会自动跳过，不会引起冲突
-if __name__ == '__main__':
-    if "STREAMLIT_subprocess_FLAG" not in os.environ:
-        script_path = os.path.abspath(__file__)
-        cmd = [sys.executable, "-m", "streamlit", "run", script_path]
-        new_env = os.environ.copy()
-        new_env["STREAMLIT_subprocess_FLAG"] = "true"
-        try:
-            subprocess.run(cmd, env=new_env)
-        except KeyboardInterrupt:
-            pass
-        sys.exit(0)
-
 st.set_page_config(
     page_title="Miss Pink Elf's Studio v10.0", 
     layout="wide", 
@@ -172,7 +158,6 @@ def get_font(size):
             continue
             
     # 如果列表里所有字体都失败了，才使用最后的备用方案
-    # 这可以确保程序永远不会因为字体问题而崩溃
     return ImageFont.load_default()
 
 @st.cache_data(show_spinner=False)
@@ -191,10 +176,8 @@ def generate_sora_prompt_with_ai(api_key, base_url, model_name, global_style, ca
     
     system_prompt = f"""
     你是由爱莉希雅强化的 Sora 2 提示词架构师。
-    
     【任务目标】
     将用户的静态分镜表，转化为一段包含 "物理逻辑" 和 "叙事流动" 的 Sora 2 (Turbo) 视频提示词。
-    
     【输出要求】
     1. 必须以技术参数开头: "{tech_specs}"
     2. 必须使用时间轴标记: [0s-2s], [2s-4s]...
